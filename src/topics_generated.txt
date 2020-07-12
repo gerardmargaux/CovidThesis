@@ -1,0 +1,131 @@
+/m/0bwgjh Medical thermometer
+/m/0c01msq Allergic rhinitis
+/m/0r3jm Corona
+/m/097wdq Infrared thermometer
+/g/1237282v surgical operation
+/m/01cdt5 Shortness of breath
+/m/015qdk Feeling
+/m/0c59df Pharmacotherapy
+/m/014961 Dehydration
+/m/079l20g Heat stroke
+/g/121wnhs7 shortness of breath
+/m/0lyf6 Breathing
+/m/02y_4q2 Corona
+/m/07mf1 Thermometer
+/m/04t14 Measurement
+/m/07gr_ Temperature
+/m/0dq9p Pneumonia
+/m/016c68 Adult
+/m/02162 Celsius
+/m/04mwwgd Cold
+/m/01b_06 Symptom
+/m/0jnvp Infant
+/m/04gc5s Degree
+/m/01b_21 Cough
+/m/05mw4by Herpes labialis
+/m/0j5fv Headache
+/m/01j6t0 Fatigue
+/m/0f3kl Diarrhea
+/m/0b76bty Sore throat
+/m/026_p_h Body temperature
+/m/0lbt3 Paracetamol
+/m/0cycc Influenza
+/m/0n073 Common cold
+/m/012lyw Stress
+/m/04mx32 Evening
+/m/013677 Myalgia
+/m/07dnd Thyroid
+/m/09x8z Stomach
+/m/0dzd8 Neck
+/m/0fd23 Allergy
+/m/0qjk8 Infectious mononucleosis
+/m/02tfl8 Abdominal pain
+/m/01hsr_ Sneeze
+/m/0j7_w Inflammation
+/m/062t2 Pain
+/m/0cjf0 Fever
+/m/03ng0t Tonsillitis
+/m/01gkcc Pharyngitis
+/m/03qmh Honey
+/m/05vywy Ear pain
+/m/039xj_ Ear
+/m/01b_3_ Swallowing
+/m/02r3cvb Neck pain
+/m/02hx53 Mucus
+/m/0405g08 Cure
+/m/0lvmz Puzzle
+/m/0gzv0 Chronic Obstructive Pulmonary Disease
+/m/02gy9_ Respiration
+/m/0gxb2 Nausea
+/m/029ggh Palpitations
+/m/095_n Heart
+/m/08y7p8 Abdomen
+/m/01l2m3 Heart failure
+/m/096bg Lung
+/m/014y53 Olfaction
+/m/01cpyy Coronavirus
+/m/0m7pl Anosmia
+/m/0ffxt Gout
+/m/0cp_p Taste
+/m/05sfr2 Ageusia
+/m/026yf Definition
+/m/01d3gn Dysgeusia
+/m/011bvr_5 dysgeusia
+/m/025swc8 Menstruation
+/m/05s5v6 Nasal congestion
+/m/047thy Postpartum infections
+/m/09jc2n Human back
+/g/1213j0cz Human body temperature
+/m/03k2qf Gastroenteritis
+/m/04hgtk Head
+/m/04fv7w Shivering
+/m/01ppsd Essential oil
+/m/087z2 Yellow fever
+/m/0cnq0 Pollen
+/m/0c1dj4 Chronic condition
+/m/01j3y1 Tickling
+/m/01b_5g Gastroesophageal reflux disease
+/m/0c78m Asthma
+/m/04f733w Thymes
+/m/03c1dkx Therapy
+/m/02vxs3q Smoking
+/m/01rvsq Syrup
+/m/01s3l8 Phlegm
+/m/053wzw Kennel
+/m/01s2xh Acute bronchitis
+/m/012qjw Vomiting
+/m/02mm_ Energy
+/m/02_ktj Morning
+/m/033488 Hot flash
+/m/01pgj4 Syndrome
+/m/0ybj Adrenal gland
+/m/0403mf5 Adrenal fatigue
+/m/0dctd Chronic fatigue syndrome
+/m/07v7rh Eye strain
+/m/01z0cf Fatigue
+/m/04dfjs Stress fracture
+/m/05vqh7 Pregnancy
+/m/027x3 Disease
+/m/07rwf2 Vertigo
+/m/0bm_lt Crus
+/m/07zry Vitamin
+/m/0743mf Otitis
+/m/01fhyk Otitis media
+/m/04w68t Otitis externa
+/m/06p_bp Rhinorrhea
+/m/03dcyh Delayed onset muscle soreness
+/m/06ntj Sports
+/m/01z02hx Sports
+/m/088fh Yellow
+/m/0bxrbq Loudspeaker system
+/m/053jb Month
+/m/016kf9 Constipation
+/m/04br3 Kidney
+/m/0142ky Back pain
+/m/0lc0w Childbirth
+/g/11bcfb_qvx Cause
+/m/05904 Migraine
+/m/046dlr Alarm clock
+/m/01j6r7 Appetite
+/m/0f421k Mometasone
+/m/02mdz9 Rhinitis
