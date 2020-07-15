@@ -1,5 +1,9 @@
+import difflib
+
 from pytrends.request import TrendReq
 import pandas as pd
+import numpy as np
+import math
 from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -208,13 +212,14 @@ def write_related_queries(keywords, filename="queries_generated.txt",
             file.write(title + "\n")
 
 
-def prediction_hospitalizations(indexes_file, hospitals_file, correlation_file, n):
+def prediction_hospitalizations(indexes_file, hospitals_file, correlation_file, n, abs_val=True):
     """
     Finds the best classifier in order to predict the number of hospitalisations based on data of previous days
     :param indexes_file: CSV file with the indexes for each topic
     :param hospitals_file: CSV file with the number of hospitalization
     :param correlation_file: CSV file with the correlation between terms
-    :param n: Number of most correlated topics to consider
+    :param n: Number of most correlated topics or queries to consider
+    :param abs_val: Boolean that indicates if the number of hospitalisations should be an absolute value (True) or a relative one (False)
     :return: The best prediction for the number of hospitalisation
     """
     # Get dates and number of new hospitalizations
@@ -225,37 +230,27 @@ def prediction_hospitalizations(indexes_file, hospitals_file, correlation_file, 
     dates = indexes[indexes['DATE'].between(date_min, date_max)]
     new_hospitals = hospitals[hospitals['DATE'].between(date_min, date_max)].groupby(['DATE']).agg({'NEW_IN': 'sum'})
 
-    # Transform number of new hospitalisations into indexes
-    list_hosp = new_hospitals['NEW_IN'].tolist()
-    max_hosp = max(list_hosp)
-    new_hosp = []
-    for hosp in list_hosp:
-        new_hosp.append((hosp/max_hosp)*100)
-    #data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hosp}
-    data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hospitals['NEW_IN'].tolist()}
+    # Transform number of new hospitalisations into indexes if abs_val = False
+    if abs_val:
+        data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hospitals['NEW_IN'].tolist()}
+    else:
+        list_hosp = new_hospitals['NEW_IN'].tolist()
+        max_hosp = max(list_hosp)
+        new_hosp = []
+        for hosp in list_hosp:
+            new_hosp.append((hosp/max_hosp)*100)
+        data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hosp}
     df = pd.DataFrame(data)
 
-    # Get the n most correlated topics and translate them into words
-    most_correlated = pd.read_csv(correlation_file)
-    terms = most_correlated['Term'].tolist()
-    terms = terms[-n:]
-    words = []
-    topics = open('topics_generated.txt', 'r')
-    lines = topics.readlines()
-    for line in lines:
-        content = line.split(" ")
-        for term in terms:
-            if content[0] == term:
-                if content[1].endswith('\n'):
-                    words.append(content[1][0:-1])
-                else:
-                    words.append(content[1])
+    # Get the n most correlated topics and queries
+    terms, queries = filter_correlated(correlation_file, n)
 
     # Create dataframe with most correlated words
     loc = 1
+    trends = pd.read_csv('trends_2.csv')
     for term in terms:
-        searches = indexes[term].tolist()
-        df.insert(loc, words[loc - 1], searches, True)
+        searches = trends[term].tolist()
+        df.insert(loc, queries[loc - 1], searches, True)
         loc += 1
 
     # Prediction of hospitalizations
@@ -315,6 +310,40 @@ def prediction_hospitalizations(indexes_file, hospitals_file, correlation_file, 
     print("Difference for Gradient Boosting Regressor = ", new_diff)
 
     return classifier
+
+
+def filter_correlated(correlation_file, n):
+    """
+    Finds the n most correlated and different topics or queries
+    :param correlation_file: CSV file with the indexes for each topic
+    :param n: Number of most correlated topics or queries to consider
+    :return: list containing the n most correlated queries and list containing the n most correlated topics
+    """
+    correlation_df = pd.read_csv(correlation_file)
+    correlation_df = correlation_df.fillna(value="HelloWorld")
+    topics = list(reversed(correlation_df['Topic'].tolist()))
+    terms = list(reversed(correlation_df['Term'].tolist()))
+    final_list_topics = []
+    final_list_terms = []
+
+    while len(final_list_topics) < n:
+        if topics[0] == "HelloWorld":
+            topics[0] = terms[0]
+        if len(final_list_topics) == 0:
+            final_list_topics.append(topics[0])
+            final_list_terms.append(terms[0])
+        else:
+            too_similar = False
+            for item in final_list_topics:
+                similarity = difflib.SequenceMatcher(None, item.lower(), topics[0].lower()).ratio()
+                if similarity > 0.5 or item.lower() in topics[0].lower() or topics[0].lower() in item.lower():
+                    too_similar = True
+            if not too_similar:
+                final_list_topics.append(topics[0])
+                final_list_terms.append(terms[0])
+        topics.remove(topics[0])
+        terms.remove(terms[0])
+    return final_list_terms, final_list_topics
 
 
 def find_correlated(cases, queries: list = None, topics: dict = None, correlation_limit=0.65, max_iter=1,
@@ -459,7 +488,9 @@ if __name__ == "__main__":
     # write_related_topics(extract_topics(toList=True) + extract_queries())
     # trends_to_csv(extract_queries(["queries_generated.txt", "symptoms.txt"]) + extract_topics(["topics_generated.txt", "topics.txt"], True))
     # spearman_hospitalization('search_trends.csv', 'hospitalization.csv')
-    prediction_hospitalizations('search_trends.csv', 'hospitalization.csv', 'correlation.csv', 5)
+
+    prediction_hospitalizations('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
+    #filter_correlated(indexes_file, n)
     """cases = hospitalization_vector("hospitalization.csv")
     queries = extract_queries()
     topics = extract_topics()
