@@ -14,7 +14,6 @@ from sklearn.tree import DecisionTreeRegressor
 from scipy.stats import spearmanr
 from random import random
 from sklearn.linear_model import LogisticRegression, LinearRegression
-from time import sleep
 
 
 def extract_topics(filename="topics.txt", toList=False):
@@ -108,7 +107,7 @@ def spearman_hospitalization(indexes_file, hospitals_file, output_file="correlat
 
 
 def plot_interest_over_time(topics,
-                            timeframe="2020-03-08 " + "2020-07-14",
+                            timeframe="2020-03-15 " + "2020-07-14",
                             geo="BE",
                             title="Interest over time in Belgium"):
     """
@@ -138,7 +137,7 @@ def plot_interest_over_time(topics,
 
 
 def write_related_topics(keywords, filename="topics_generated.txt",
-                         timeframe="2020-03-08 " + "2020-07-14",
+                         timeframe="2020-03-15 " + "2020-07-14",
                          geo='BE'):
     """
     Writes the topics related to the topics provided into the filename. Duplicates are removed
@@ -176,7 +175,7 @@ def write_related_topics(keywords, filename="topics_generated.txt",
 
 
 def write_related_queries(keywords, filename="queries_generated.txt",
-                          timeframe="2020-03-08 " + "2020-07-14",
+                          timeframe="2020-03-15 " + "2020-07-14",
                           geo='BE'):
     """
     Writes the queries related to the keywords provided into the filename. Duplicates are removed
@@ -362,13 +361,15 @@ def filter_correlated(correlation_file, n):
 
 
 def find_correlated(cases, queries: list = None, topics: dict = None, correlation_limit=0.65, max_iter=1,
-                       timeframe="2020-03-01 " + "2020-07-15",
-                       geo='BE',
-                       trends_file="trends_2.csv",
-                       correlation_file="correlation_3.csv",
-                       print_info=False):
+                    timeframe="2020-03-08 " + "2020-07-14",
+                    geo='BE',
+                    trends_file="trends_2.csv",
+                    correlation_file="correlation_3.csv",
+                    proxies='',
+                    cat=0,
+                    print_info=True):
     """
-    Finds new correlated topics and queries with respect to the cases provided
+    find new correlated topics and queries with respect to the cases provided
     :param queries: initial queries. Related queries & topics will be retrieved from here
     :param topics: initial topics. Related queries & topics will be retrieved from here
     :param cases: data vector to be used. len(cases) == number of days in timeframe
@@ -380,12 +381,20 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
     :param geo: geographic region
     :param correlation_file: where to write the correlation and p value
     :param trends_file: where to write the RSV
+    :param proxies: list of HTTPS proxies to use. '' means no proxy
+    :param cat: category for the search. 0 means all categories, 45 is Health etc. List of categories is available at
+        https://github.com/pat310/google-trends-api/wiki/Google-Trends-Categories
     :param print_info: True if information is supposed to be written during the run
     :return:
     """
     # get the related topics and queries and keep the most correlated with respect to the data provided
     assert queries is not None or topics is not None
-    pytrends = TrendReq(hl='en-US', timeout=(100, 250), retries=2, backoff_factor=0.1)
+    if len(trends_file.split('.')) != 2:
+        trends_file += '.csv'
+    if len(correlation_file.split('.')) != 2:
+        correlation_file += '.csv'
+
+    pytrends = TrendReq(hl='en-US', timeout=(100, 250), retries=2, backoff_factor=0.1, proxies=proxies)
     correlation_header = pd.DataFrame(columns=['Term', 'Topic', 'Correlation', 'Pvalue'])
     correlation_df = correlation_header.copy(True)
     correlation_batch = correlation_header.copy(True)
@@ -397,19 +406,24 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
         correlation_batch = pd.concat([correlation_batch, pd.DataFrame({'Term': queries})])
     if topics is not None:
         keywords_new.update(topics.keys())
-        correlation_batch = pd.concat([correlation_batch, pd.DataFrame({'Term': list(topics.keys()), 'Topic': list(topics.values())})])
+        correlation_batch = pd.concat(
+            [correlation_batch, pd.DataFrame({'Term': list(topics.keys()), 'Topic': list(topics.values())})])
+
+    if print_info:
+        init = time.perf_counter()
 
     for iteration in range(max_iter + 1):  # first iteration = initial keywords provided
         if print_info:
-            init = time.perf_counter()
-            step_init = init
-            print("iteration {:d}/{:d}".format(iteration+1, max_iter+1) +
-                  "\n\tadding related keywords and topics of {:d} keywords...".format(len(keywords_new)), end="", flush=True)
+            iter_init = time.perf_counter()
+            step_init = iter_init
+            print("iteration {:d}/{:d}".format(iteration + 1, max_iter + 1) +
+                  "\n\tadding related keywords and topics of {:d} keywords... ".format(len(keywords_new)), end="",
+                  flush=True)
         if iteration != 0:
             correlation_batch = correlation_header.copy(True)  # batch of keywords for each iteration
             for word in keywords_new:  # add the new keywords
                 time.sleep(random())
-                pytrends.build_payload([word], cat=0, timeframe=timeframe, geo=geo, gprop='')
+                pytrends.build_payload([word], cat=cat, timeframe=timeframe, geo=geo, gprop='')
                 for i in range(2):
                     if i == 0:  # related queries
                         req = pytrends.related_queries()
@@ -429,7 +443,8 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
                         if req[word]['top'] is None or req[word]['top'].empty:
                             correlation_tmp = req[word]['rising'][description]
                         else:
-                            correlation_tmp = pd.concat([req[word]['rising'][description], req[word]['top'][description]])
+                            correlation_tmp = pd.concat(
+                                [req[word]['rising'][description], req[word]['top'][description]])
                         correlation_batch = pd.concat([correlation_batch,
                                                        correlation_tmp.rename(columns=renaming).merge(
                                                            correlation_header, how='outer')])
@@ -438,7 +453,8 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
 
         # get the interest over time for the new keywords
         if print_info:
-            print("ended in {.2f} s\n\tcomputing interest over time...".format(time.perf_counter() - step_init), end="", flush=True)
+            print("Ended in {:.2f} s\n\tcomputing interest over time... ".format(time.perf_counter() - step_init),
+                  end="", flush=True)
             step_init = time.perf_counter()
         interest = []
         for word in correlation_batch['Term']:
@@ -446,7 +462,6 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
                 continue
             else:
                 keywords_used.add(word)
-            time.sleep(2 + 2 * random())  # prevent error 429
             pytrends.build_payload([word], cat=0, timeframe=timeframe, geo=geo, gprop='')
             interest_tmp = pytrends.interest_over_time()
             if not interest_tmp.empty:
@@ -456,7 +471,8 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
 
         # correlation test for each new keyword in the batch
         if print_info:
-            print("ended in {.2f} s\n\tperforming correlation test...".format(time.perf_counter() - step_init), end="", flush=True)
+            print("Ended in {:.2f} s\n\tperforming correlation test... ".format(time.perf_counter() - step_init),
+                  end="", flush=True)
             step_init = time.perf_counter()
         keywords_new = set()
         for row in interest_batch:
@@ -474,15 +490,15 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
         else:
             interest_df = interest_df.join(interest_batch)
         if print_info:
-            print("ended in {.2f} s\n\ttotal iteration time: {:2f}".format(time.perf_counter() - step_init,
-                                                                  time.perf_counter() - init), end="", flush=True)
+            cur = time.perf_counter()
+            print("Ended in {:.2f} s\n\t\ttotal iteration time: {:.2f} s\n\t\ttotal execution time: {:.2f} s"
+                  .format(cur - step_init, cur - iter_init, cur - init), flush=True)
 
-    interest_df.index.rename('DATE', inplace=True)
-    interest_df.to_csv(trends_file, index=False)
-    correlation_df.reset_index(inplace=True)
+    interest_df.index.rename('DATE', inplace=True)  # same name as hospitalization file
+    interest_df.to_csv(trends_file)
     correlation_df.drop_duplicates(inplace=True)
-    correlation_df = correlation_df[correlation_df['Correlation'].notna()]
-    correlation_df.reindex(correlation_df['Correlation'].abs().sort_values().index).to_csv(correlation_file, index=False)
+    correlation_df.reindex(correlation_df['Correlation'].abs().sort_values().index).to_csv(correlation_file,
+                                                                                           index=False)
     return correlation_df, interest_df
 
 
@@ -499,15 +515,14 @@ def hospitalization_vector(hospitals_file):
 
 if __name__ == "__main__":
     # plot_interest_over_time(extract_topics())
-    write_related_queries(extract_topics(toList=True) + extract_queries())
-    write_related_topics(extract_topics(toList=True) + extract_queries())
+    # write_related_queries(extract_topics(toList=True) + extract_queries())
+    # write_related_topics(extract_topics(toList=True) + extract_queries())
     # trends_to_csv(extract_queries(["queries_generated.txt", "symptoms.txt"]) + extract_topics(["topics_generated.txt", "topics.txt"], True))
     # spearman_hospitalization('search_trends.csv', 'hospitalization.csv')
 
     #prediction_hospitalizations_one_day('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
     #filter_correlated(indexes_file, n)
-    """cases = hospitalization_vector("hospitalization.csv")
+    cases = hospitalization_vector("hospitalization.csv")
     queries = extract_queries()
     topics = extract_topics()
     find_correlated(cases, queries=queries, topics=topics, max_iter=1)
-"""
