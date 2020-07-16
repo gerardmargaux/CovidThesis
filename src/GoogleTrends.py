@@ -4,7 +4,7 @@ from pytrends.request import TrendReq
 import pandas as pd
 import numpy as np
 import math
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
@@ -71,7 +71,7 @@ def trends_to_csv(topics,
     dataset = []
     pytrends = TrendReq(timeout=(100, 250))
     for search in topics:
-        sleep(2 + random() * 2)
+        time.sleep(2 + random() * 2)
         pytrends.build_payload([search], cat=0, timeframe=timeframe, geo='BE', gprop='')
         data = pytrends.interest_over_time()
         if not data.empty:
@@ -80,6 +80,48 @@ def trends_to_csv(topics,
     result = pd.concat(dataset, axis=1)
     result.index.rename('DATE', inplace=True)
     result.to_csv(output_filename)
+
+
+def offset_trends_hospi(n, indexes_file="search_trends.csv", hospitals_file="hospitalization.csv", begin=None,
+                        end=None):
+    """
+    extract the hospitalization during [begin, end] and the trends from [begin - n days, end]
+    an exception is raised if the dates provided are invalid
+    :param indexes_file: CSV file with the indexes for each topic
+    :param hospitals_file: CSV file with the number of hospitalization
+    :param n: number of days in the offset
+    :param begin: date of first hospitalization. None = first date in the hospitalization file
+    :param end: date of last hospitalization. None = last date in the hospitalization file
+    :return: df, hospi
+        * df: index dataframe, from begin date minus n days to end date
+        * hospi: hospitalizations cases, from begin date to end date
+    """
+    if len(indexes_file.split('.')) != 2:
+        indexes_file += '.csv'
+    if len(hospitals_file.split('.')) != 2:
+        hospitals_file += '.csv'
+    hospitals = pd.read_csv(hospitals_file)
+    indexes = pd.read_csv(indexes_file)
+    if begin is None:
+        begin = hospitals['DATE'].min()
+    elif hospitals['DATE'].min() > begin:
+        raise Exception("offset_hospi_trends: not enough data in hospital file: "
+                        "first date is {:10s} but asked data from {:10s}".format(hospitals['DATE'].min(), begin))
+    if end is None:
+        end = hospitals['DATE'].max()
+    elif hospitals['DATE'].max() < end:
+        raise Exception("offset_hospi_trends: not enough data in hospital file: "
+                        "last date is {:10s} but asked data until {:10s}".format(hospitals['DATE'].max(), end))
+    begin_trends = str(date.fromisoformat(begin) - timedelta(days=n))
+    if indexes['DATE'].min() > begin_trends:
+        raise Exception("offset_hospi_trends: not enough data in indexes file: "
+                        "first date is {:10s} but asked data from {:10s}".format(indexes['DATE'].min(), begin_trends))
+    if indexes['DATE'].max() < end:
+        raise Exception("offset_hospi_trends: not enough data in indexes file: "
+                        "last date is {:10s} but asked data until {:10s}".format(indexes['DATE'].max(), end))
+    hospi = hospitals[hospitals['DATE'].between(begin, end)].groupby(['DATE']).agg({'NEW_IN': 'sum'})['NEW_IN'].tolist()
+    indexes = indexes[indexes['DATE'].between(begin_trends, end)]
+    return indexes, hospi
 
 
 def spearman_hospitalization(indexes_file, hospitals_file, output_file="correlation.csv"):
@@ -154,7 +196,7 @@ def write_related_topics(keywords, filename="topics_generated.txt",
     data = pd.DataFrame()
     pytrends = TrendReq(timeout=(10, 25))
     for item in reference:
-        sleep(2 + random() * 2)
+        time.sleep(2 + random() * 2)
         pytrends.build_payload([item], cat=0, timeframe=timeframe, geo=geo, gprop='')
         req = pytrends.related_topics()
         # append the related topics (both rising and top topics) to the dataset
@@ -192,7 +234,7 @@ def write_related_queries(keywords, filename="queries_generated.txt",
     data = pd.DataFrame()
     pytrends = TrendReq(timeout=(10, 25))
     for item in reference:
-        sleep(2 + random() * 2)
+        time.sleep(2 + random() * 2)
         pytrends.build_payload([item], cat=0, timeframe=timeframe, geo=geo, gprop='')
         req = pytrends.related_queries()
         # append the related queries (both rising and top topics) to the dataset
@@ -238,7 +280,7 @@ def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlatio
         max_hosp = max(list_hosp)
         new_hosp = []
         for hosp in list_hosp:
-            new_hosp.append((hosp/max_hosp)*100)
+            new_hosp.append((hosp / max_hosp) * 100)
         data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hosp}
     df = pd.DataFrame(data)
 
@@ -255,10 +297,10 @@ def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlatio
 
     # Prediction of hospitalizations
     df['Date'] = pd.to_datetime(df['Date']).map(datetime.toordinal)
-    train = df.head(int(len(df)-1))
+    train = df.head(int(len(df) - 1))
     X_train = train[train.columns.difference(['New_hospitalisations'])]
     y_train = train['New_hospitalisations']
-    y_train = y_train.head(int(len(df)-1))
+    y_train = y_train.head(int(len(df) - 1))
     test = df.tail(1)
     X_test = test[test.columns.difference(['New_hospitalisations'])]
     y_test = test['New_hospitalisations']
@@ -462,7 +504,7 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
                 continue
             else:
                 keywords_used.add(word)
-            pytrends.build_payload([word], cat=0, timeframe=timeframe, geo=geo, gprop='')
+            pytrends.build_payload([word], cat=cat, timeframe=timeframe, geo=geo, gprop='')
             interest_tmp = pytrends.interest_over_time()
             if not interest_tmp.empty:
                 interest.append(interest_tmp.drop(labels=['isPartial'], axis='columns'))
@@ -520,9 +562,6 @@ if __name__ == "__main__":
     # trends_to_csv(extract_queries(["queries_generated.txt", "symptoms.txt"]) + extract_topics(["topics_generated.txt", "topics.txt"], True))
     # spearman_hospitalization('search_trends.csv', 'hospitalization.csv')
 
-    #prediction_hospitalizations_one_day('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
-    #filter_correlated(indexes_file, n)
-    cases = hospitalization_vector("hospitalization.csv")
-    queries = extract_queries()
-    topics = extract_topics()
-    find_correlated(cases, queries=queries, topics=topics, max_iter=1)
+    # prediction_hospitalizations_one_day('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
+    # filter_correlated(indexes_file, n)
+    trends, hospi = offset_trends_hospi(5, begin='2020-03-20', end='2020-07-09')
