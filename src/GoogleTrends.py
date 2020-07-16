@@ -108,7 +108,7 @@ def spearman_hospitalization(indexes_file, hospitals_file, output_file="correlat
 
 
 def plot_interest_over_time(topics,
-                            timeframe="2020-03-11 " + datetime.today().strftime('%Y-%m-%d'),
+                            timeframe="2020-03-08 " + "2020-07-14",
                             geo="BE",
                             title="Interest over time in Belgium"):
     """
@@ -138,7 +138,7 @@ def plot_interest_over_time(topics,
 
 
 def write_related_topics(keywords, filename="topics_generated.txt",
-                         timeframe="2020-03-11 " + datetime.today().strftime('%Y-%m-%d'),
+                         timeframe="2020-03-08 " + "2020-07-14",
                          geo='BE'):
     """
     Writes the topics related to the topics provided into the filename. Duplicates are removed
@@ -176,7 +176,7 @@ def write_related_topics(keywords, filename="topics_generated.txt",
 
 
 def write_related_queries(keywords, filename="queries_generated.txt",
-                          timeframe="2020-03-11 " + datetime.today().strftime('%Y-%m-%d'),
+                          timeframe="2020-03-08 " + "2020-07-14",
                           geo='BE'):
     """
     Writes the queries related to the keywords provided into the filename. Duplicates are removed
@@ -212,15 +212,16 @@ def write_related_queries(keywords, filename="queries_generated.txt",
             file.write(title + "\n")
 
 
-def prediction_hospitalizations(indexes_file, hospitals_file, correlation_file, n, abs_val=True):
+def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlation_file, n, abs_val=True):
     """
     Finds the best classifier in order to predict the number of hospitalisations based on data of previous days
+    (one-day prediction)
     :param indexes_file: CSV file with the indexes for each topic
     :param hospitals_file: CSV file with the number of hospitalization
     :param correlation_file: CSV file with the correlation between terms
     :param n: Number of most correlated topics or queries to consider
     :param abs_val: Boolean that indicates if the number of hospitalisations should be an absolute value (True) or a relative one (False)
-    :return: The best prediction for the number of hospitalisation
+    :return: The best prediction for the number of hospitalisation of tomorrow
     """
     # Get dates and number of new hospitalizations
     indexes = pd.read_csv(indexes_file)
@@ -263,11 +264,25 @@ def prediction_hospitalizations(indexes_file, hospitals_file, correlation_file, 
     X_test = test[test.columns.difference(['New_hospitalisations'])]
     y_test = test['New_hospitalisations']
     y_test = y_test.head(1)
+    print(df)
 
     # The classification model that we will use has to be a regression since the result should not be binary
+    classifier = prediction_models(X_train, y_train, X_test, y_test)
+
+    return classifier
+
+
+def prediction_models(X_train, y_train, X_test, y_test):
+    """
+    Finds the best classifier in order to predict the number of new hospitalisations
+    :param X_train: features used for learning by the model
+    :param y_train: number of new hospitalisations known
+    :param X_test: all features except the hospitalisation that will be used for the prediction
+    :param y_test: true number of new hospitalisations (the prediction should be close to this value)
+    :return: The value of the best prediction for the number of new hospitalisations
+    """
     difference = float("inf")
     classifier = 0
-    print(df)
 
     # Decision Tree Regression
     model = DecisionTreeRegressor(max_depth=8, min_samples_leaf=0.13, random_state=0)
@@ -347,7 +362,7 @@ def filter_correlated(correlation_file, n):
 
 
 def find_correlated(cases, queries: list = None, topics: dict = None, correlation_limit=0.65, max_iter=1,
-                       timeframe="2020-03-15 " + "2020-07-09",
+                       timeframe="2020-03-01 " + "2020-07-15",
                        geo='BE',
                        trends_file="trends_2.csv",
                        correlation_file="correlation_3.csv",
@@ -484,14 +499,15 @@ def hospitalization_vector(hospitals_file):
 
 if __name__ == "__main__":
     # plot_interest_over_time(extract_topics())
-    # write_related_queries(extract_topics(toList=True) + extract_queries())
-    # write_related_topics(extract_topics(toList=True) + extract_queries())
+    write_related_queries(extract_topics(toList=True) + extract_queries())
+    write_related_topics(extract_topics(toList=True) + extract_queries())
     # trends_to_csv(extract_queries(["queries_generated.txt", "symptoms.txt"]) + extract_topics(["topics_generated.txt", "topics.txt"], True))
     # spearman_hospitalization('search_trends.csv', 'hospitalization.csv')
 
-    prediction_hospitalizations('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
+    #prediction_hospitalizations_one_day('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
     #filter_correlated(indexes_file, n)
     """cases = hospitalization_vector("hospitalization.csv")
     queries = extract_queries()
     topics = extract_topics()
-    find_correlated(cases, queries=queries, topics=topics, max_iter=1)"""
+    find_correlated(cases, queries=queries, topics=topics, max_iter=1)
+"""
