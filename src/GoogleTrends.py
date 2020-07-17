@@ -113,15 +113,15 @@ def offset_trends_hospi(n, indexes_file="trends_2.csv", hospitals_file="hospital
         raise Exception("offset_hospi_trends: not enough data in hospital file: "
                         "last date is {:10s} but asked data until {:10s}".format(hospitals['DATE'].max(), end))
     begin_trends = str(date.fromisoformat(begin) - timedelta(days=n))
-    #end_trends = str(date.fromisoformat(end) - timedelta(days=n))
+    end_trends = str(date.fromisoformat(end) - timedelta(days=n))
     if indexes['DATE'].min() > begin_trends:
         raise Exception("offset_hospi_trends: not enough data in indexes file: "
                         "first date is {:10s} but asked data from {:10s}".format(indexes['DATE'].min(), begin_trends))
-    if indexes['DATE'].max() < end:
+    if indexes['DATE'].max() < end_trends:
         raise Exception("offset_hospi_trends: not enough data in indexes file: "
-                        "last date is {:10s} but asked data until {:10s}".format(indexes['DATE'].max(), end))
+                        "last date is {:10s} but asked data until {:10s}".format(indexes['DATE'].max(), end_trends))
     hospi = hospitals[hospitals['DATE'].between(begin, end)].groupby(['DATE']).agg({'NEW_IN': 'sum'})['NEW_IN'].tolist()
-    indexes = indexes[indexes['DATE'].between(begin_trends, end)]
+    indexes = indexes[indexes['DATE'].between(begin_trends, end_trends)]
     return indexes, hospi
 
 
@@ -269,6 +269,7 @@ def prediction_hospitalizations(correlation_file, n, days, abs_val=True, date_be
     :return: The best prediction for the number of hospitalisation of tomorrow
     """
     # Get dates and number of new hospitalizations
+    #days += 1  # TODO check the format with the +1
     date_begin = str(date.fromisoformat(date_begin) + timedelta(days))
     trends, hospi = offset_trends_hospi(days, begin=date_begin, end=date_end)
     dates = trends['DATE'].tolist()
@@ -308,13 +309,15 @@ def prediction_hospitalizations(correlation_file, n, days, abs_val=True, date_be
     test = df.tail(1)
     X_test = test[test.columns.difference(['New_hospitalisations'])]
     y_test = test['New_hospitalisations']
-    y_test = y_test.head(1)
-    print(df)
+    #y_test = y_test.head(1)
+    y_test = y_test.tolist()
+    #print(df)
 
     # The classification model that we will use has to be a regression since the result should not be binary
     classifier = prediction_models(X_train, y_train, X_test, y_test)
-    date2 = str(date.fromisoformat(date_end) + timedelta(days+1))
-    print("Estimation of the number of new hospi (", date2, ") = ", classifier)
+    #date2 = str(date.fromisoformat(date_end) + timedelta(days+1))
+    print("Estimation of the number of new hospi ({:10s}) using data from {:d} day{:s} before = {:.3f}"
+          .format(date_end, days, 's' if days > 1 else '',classifier[0]))
     #print("True number of new hospi (", date2, ") = ", y_test.tolist())
     return classifier
 
@@ -330,7 +333,7 @@ def prediction_models(X_train, y_train, X_test, y_test):
     """
     difference = float("inf")
     classifier = 0
-
+    print("Trying to predict {:.3f} ".format(y_test[0]))
     # Decision Tree Regression
     model = DecisionTreeRegressor(max_depth=8, min_samples_leaf=0.13, random_state=0)
     model.fit(X_train, y_train)
@@ -339,7 +342,9 @@ def prediction_models(X_train, y_train, X_test, y_test):
     if new_diff < difference:
         difference = abs(y_pred - y_test).tolist()[0]
         classifier = y_pred
-    print("Difference for Decision Tree Regressor = ", new_diff)
+    error_percentage = (new_diff / y_test[0]) * 100
+    print("\t{:28s} predicted: {:7.3f}\t difference: {:+8.3f}\t ({:6.2f}% error)"
+          .format("Decision Tree Regressor:", y_pred[0], (y_pred - y_test).tolist()[0], error_percentage))
 
     # Linear Regression
     model = LinearRegression()
@@ -349,7 +354,9 @@ def prediction_models(X_train, y_train, X_test, y_test):
     if new_diff < difference:
         difference = abs(y_pred - y_test).tolist()[0]
         classifier = y_pred
-    print("Difference for Linear Regression = ", new_diff)
+    error_percentage = (new_diff / y_test[0]) * 100
+    print("\t{:28s} predicted: {:7.3f}\t difference: {:+8.3f}\t ({:6.2f}% error)"
+          .format("Linear Regression:", y_pred[0], (y_pred - y_test).tolist()[0], error_percentage))
 
     # Random Forest Regression
     model = RandomForestRegressor(max_depth=8, random_state=0)
@@ -359,7 +366,10 @@ def prediction_models(X_train, y_train, X_test, y_test):
     if new_diff < difference:
         difference = abs(y_pred - y_test).tolist()[0]
         classifier = y_pred
-    print("Difference for Random Forest Regressor = ", new_diff)
+    error_percentage = (new_diff / y_test[0]) * 100
+    print("\t{:28s} predicted: {:7.3f}\t difference: {:+8.3f}\t ({:6.2f}% error)"
+          .format("Random Forest Regressor:", y_pred[0], (y_pred - y_test).tolist()[0], error_percentage))
+
 
     # Gradient Boosting Regression
     model = GradientBoostingRegressor(random_state=0)
@@ -369,7 +379,9 @@ def prediction_models(X_train, y_train, X_test, y_test):
     if new_diff < difference:
         difference = abs(y_pred - y_test).tolist()[0]
         classifier = y_pred
-    print("Difference for Gradient Boosting Regressor = ", new_diff)
+    error_percentage = (new_diff / y_test[0]) * 100
+    print("\t{:28s} predicted: {:7.3f}\t difference: {:+8.3f}\t ({:6.2f}% error)"
+          .format("Gradient Boosting Regressor:", y_pred[0], (y_pred - y_test).tolist()[0], error_percentage))
 
     return classifier
 
@@ -571,4 +583,10 @@ if __name__ == "__main__":
     queries = extract_queries()
     topics = extract_topics()
     find_correlated(cases, queries=queries, topics=topics, max_iter=1)"""
+    prediction_hospitalizations('correlation_3.csv', n=5, days=0, abs_val=True, date_begin='2020-03-15', date_end='2020-07-14')
+    prediction_hospitalizations('correlation_3.csv', n=5, days=1, abs_val=True, date_begin='2020-03-15', date_end='2020-07-14')
+    prediction_hospitalizations('correlation_3.csv', n=5, days=2, abs_val=True, date_begin='2020-03-15', date_end='2020-07-14')
     prediction_hospitalizations('correlation_3.csv', n=5, days=3, abs_val=True, date_begin='2020-03-15', date_end='2020-07-14')
+    prediction_hospitalizations('correlation_3.csv', n=5, days=4, abs_val=True, date_begin='2020-03-15', date_end='2020-07-14')
+
+# predicted: ****** actual: ***** difference: +- *******
