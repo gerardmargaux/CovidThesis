@@ -59,7 +59,7 @@ def extract_queries(filename="symptoms.txt"):
 
 def trends_to_csv(topics,
                   output_filename='search_trends.csv',
-                  timeframe="2020-03-11 " + datetime.today().strftime('%Y-%m-%d')):
+                  timeframe="2020-03-15 " + datetime.today().strftime('%Y-%m-%d')):
     """
     Analyses multiple trends over the timeframe provided. Each trends is computed individually => can be time consuming
     :param output_filename: CSV filename where to write the results
@@ -82,7 +82,7 @@ def trends_to_csv(topics,
     result.to_csv(output_filename)
 
 
-def offset_trends_hospi(n, indexes_file="search_trends.csv", hospitals_file="hospitalization.csv", begin=None,
+def offset_trends_hospi(n, indexes_file="trends_2.csv", hospitals_file="hospitalization.csv", begin=None,
                         end=None):
     """
     extract the hospitalization during [begin, end] and the trends from [begin - n days, end]
@@ -113,6 +113,7 @@ def offset_trends_hospi(n, indexes_file="search_trends.csv", hospitals_file="hos
         raise Exception("offset_hospi_trends: not enough data in hospital file: "
                         "last date is {:10s} but asked data until {:10s}".format(hospitals['DATE'].max(), end))
     begin_trends = str(date.fromisoformat(begin) - timedelta(days=n))
+    #end_trends = str(date.fromisoformat(end) - timedelta(days=n))
     if indexes['DATE'].min() > begin_trends:
         raise Exception("offset_hospi_trends: not enough data in indexes file: "
                         "first date is {:10s} but asked data from {:10s}".format(indexes['DATE'].min(), begin_trends))
@@ -149,7 +150,7 @@ def spearman_hospitalization(indexes_file, hospitals_file, output_file="correlat
 
 
 def plot_interest_over_time(topics,
-                            timeframe="2020-03-15 " + "2020-07-14",
+                            timeframe="2020-03-15 " + datetime.today().strftime('%Y-%m-%d'),
                             geo="BE",
                             title="Interest over time in Belgium"):
     """
@@ -179,7 +180,7 @@ def plot_interest_over_time(topics,
 
 
 def write_related_topics(keywords, filename="topics_generated.txt",
-                         timeframe="2020-03-15 " + "2020-07-14",
+                         timeframe="2020-03-15 " + datetime.today().strftime('%Y-%m-%d'),
                          geo='BE'):
     """
     Writes the topics related to the topics provided into the filename. Duplicates are removed
@@ -217,7 +218,7 @@ def write_related_topics(keywords, filename="topics_generated.txt",
 
 
 def write_related_queries(keywords, filename="queries_generated.txt",
-                          timeframe="2020-03-15 " + "2020-07-14",
+                          timeframe="2020-03-15 " + datetime.today().strftime('%Y-%m-%d'),
                           geo='BE'):
     """
     Writes the queries related to the keywords provided into the filename. Duplicates are removed
@@ -253,7 +254,7 @@ def write_related_queries(keywords, filename="queries_generated.txt",
             file.write(title + "\n")
 
 
-def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlation_file, n, abs_val=True):
+def prediction_hospitalizations(correlation_file, n, days, abs_val=True, date_begin='2020-03-15', date_end='2020-07-09'):
     """
     Finds the best classifier in order to predict the number of hospitalisations based on data of previous days
     (one-day prediction)
@@ -261,27 +262,31 @@ def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlatio
     :param hospitals_file: CSV file with the number of hospitalization
     :param correlation_file: CSV file with the correlation between terms
     :param n: Number of most correlated topics or queries to consider
+    :param days: Number of days we want to predict
     :param abs_val: Boolean that indicates if the number of hospitalisations should be an absolute value (True) or a relative one (False)
+    :param date_begin: First date for which we have the number of new hospitalisations
+    :param date_end: Last date that we use in order to predict the number of new hospitalisations
     :return: The best prediction for the number of hospitalisation of tomorrow
     """
     # Get dates and number of new hospitalizations
-    indexes = pd.read_csv(indexes_file)
-    hospitals = pd.read_csv(hospitals_file)
-    date_min = max(indexes['DATE'].min(), hospitals['DATE'].min())  # get a common time interval for both files
-    date_max = min(indexes['DATE'].max(), hospitals['DATE'].max())
-    dates = indexes[indexes['DATE'].between(date_min, date_max)]
-    new_hospitals = hospitals[hospitals['DATE'].between(date_min, date_max)].groupby(['DATE']).agg({'NEW_IN': 'sum'})
+    date_begin = str(date.fromisoformat(date_begin) + timedelta(days))
+    trends, hospi = offset_trends_hospi(days, begin=date_begin, end=date_end)
+    dates = trends['DATE'].tolist()
+
+    diff = len(dates) - len(hospi)
+    dates = dates[diff:]
+    """if diff > 0:
+        hospi = [-1]*diff + hospi"""
 
     # Transform number of new hospitalisations into indexes if abs_val = False
     if abs_val:
-        data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hospitals['NEW_IN'].tolist()}
+        data = {'Date': dates, 'New_hospitalisations': hospi}
     else:
-        list_hosp = new_hospitals['NEW_IN'].tolist()
-        max_hosp = max(list_hosp)
+        max_hosp = max(hospi)
         new_hosp = []
-        for hosp in list_hosp:
+        for hosp in hospi:
             new_hosp.append((hosp / max_hosp) * 100)
-        data = {'Date': indexes['DATE'].tolist(), 'New_hospitalisations': new_hosp}
+        data = {'Date': dates, 'New_hospitalisations': new_hosp}
     df = pd.DataFrame(data)
 
     # Get the n most correlated topics and queries
@@ -289,9 +294,8 @@ def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlatio
 
     # Create dataframe with most correlated words
     loc = 1
-    trends = pd.read_csv('trends_2.csv')
     for term in terms:
-        searches = trends[term].tolist()
+        searches = trends[term].tolist()[diff:]
         df.insert(loc, queries[loc - 1], searches, True)
         loc += 1
 
@@ -309,7 +313,9 @@ def prediction_hospitalizations_one_day(indexes_file, hospitals_file, correlatio
 
     # The classification model that we will use has to be a regression since the result should not be binary
     classifier = prediction_models(X_train, y_train, X_test, y_test)
-
+    date2 = str(date.fromisoformat(date_end) + timedelta(days+1))
+    print("Estimation of the number of new hospi (", date2, ") = ", classifier)
+    #print("True number of new hospi (", date2, ") = ", y_test.tolist())
     return classifier
 
 
@@ -403,7 +409,7 @@ def filter_correlated(correlation_file, n):
 
 
 def find_correlated(cases, queries: list = None, topics: dict = None, correlation_limit=0.65, max_iter=1,
-                    timeframe="2020-03-08 " + "2020-07-14",
+                    timeframe="2020-03-15 " + datetime.today().strftime('%Y-%m-%d'),
                     geo='BE',
                     trends_file="trends_2.csv",
                     correlation_file="correlation_3.csv",
@@ -561,7 +567,8 @@ if __name__ == "__main__":
     # write_related_topics(extract_topics(toList=True) + extract_queries())
     # trends_to_csv(extract_queries(["queries_generated.txt", "symptoms.txt"]) + extract_topics(["topics_generated.txt", "topics.txt"], True))
     # spearman_hospitalization('search_trends.csv', 'hospitalization.csv')
-
-    # prediction_hospitalizations_one_day('search_trends.csv', 'hospitalization.csv', 'correlation_3.csv', n=5, abs_val=True)
-    # filter_correlated(indexes_file, n)
-    trends, hospi = offset_trends_hospi(5, begin='2020-03-20', end='2020-07-09')
+    """cases = hospitalization_vector("hospitalization.csv")
+    queries = extract_queries()
+    topics = extract_topics()
+    find_correlated(cases, queries=queries, topics=topics, max_iter=1)"""
+    prediction_hospitalizations('correlation_3.csv', n=5, days=3, abs_val=True, date_begin='2020-03-15', date_end='2020-07-14')
