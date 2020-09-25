@@ -96,9 +96,9 @@ def extract_topics(filename="topics.txt", toList=False):
     return results if not toList else list(results.keys())
 
 
-def compute_corr(left, delta, full_data_be):
-    thisdata = pd.concat([full_data_be[left].shift(delta), full_data_be["HOSP_CORR"]], axis=1)
-    return thisdata.corr()["HOSP_CORR"][left]
+def compute_corr(left, delta, full_data_be, init_df):
+    thisdata = pd.concat([init_df[left].shift(delta), full_data_be["HOSP"]], axis=1)
+    return thisdata.corr()["HOSP"][left]
 
 
 def relevant_pytrends(init_file,
@@ -110,7 +110,7 @@ def relevant_pytrends(init_file,
                       verbose: bool = True,
                       wait_time: float = 5.0,
                       step=0,
-                      threshold=0.65):
+                      threshold=0.8):
     """
     get the relevant google trends
     :param init_file: init file of keywords
@@ -121,17 +121,29 @@ def relevant_pytrends(init_file,
     stop_date = get_last_date_of_month(stop_year, stop_mon)
     init_topics = extract_topics()  # initial dict of topics
     init_df = pd.concat([load_term(key, val) for key, val in init_topics.items()], axis=1)  # interest over time for each topics
-    init_df = init_df.rolling(7, center=True).mean().reset_index(0)  # rolling average
-    data_be = pd.read_csv("be-covid-hospi.csv").groupby(["DATE"]).agg({"NEW_IN": "sum"}).reset_index().rename(
+    init_df = init_df.rolling(7, center=True).mean().dropna()  # rolling average
+    data_be = pd.read_csv("be-covid-hospi.csv").groupby(["DATE"]).agg({"NEW_IN": "sum"}).rename(
         columns={"NEW_IN": "HOSP"})  # data for belgium
-    data_be = data_be.rolling(7, center=True).mean().reset_index(0)
+    data_be = data_be.rolling(7, center=True).mean().dropna()
+
+    # Add "fake" data (zeroes before the beginning of the crisis) for each loc
+    toadd = []
+    min_index = data_be.index.min()
+    end = datetime.strptime(min_index, "%Y-%m-%d").date()
+    min_index_init_df = init_df.index.min()
+    cur = datetime.strptime(min_index_init_df, "%Y-%m-%d").date()
+
+    while cur != end:
+        toadd.append([cur.strftime("%Y-%m-%d"), 0])
+        cur += timedelta(days=1)
+    data_be = data_be.reset_index().append(pd.DataFrame(toadd, columns=["DATE", "HOSP"])).set_index("DATE")
 
     out = []
-    for term in init_topics:
-        correlations = [(delay, compute_corr(term, delay, data_be)) for delay in range(0, 17)]
-        best_delay, best_corr = max(correlations, key=lambda x: x[1])
-        out.append((term, best_delay, best_corr))
-    out = list(filter(lambda x: x[2] > threshold, out))  # keep only the most correlated topics
+    for key, val in init_topics.items():
+        correlations = [(delay, compute_corr(key, delay, data_be, init_df)) for delay in range(0, 17)]
+        best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
+        out.append((key, best_delay, best_corr))
+    out = list(filter(lambda x: abs(x[2]) > threshold, out))  # keep only the most correlated topics
     out = [x[0] for x in out]  # keep only the term, not the tuples
 
     init_df = init_df[out]  # filter the df
@@ -147,21 +159,26 @@ def relevant_pytrends(init_file,
             total_topics = {**new_topics, **total_topics}
 
         # evaluate new topics over time
-        related_df = pd.concat([load_term(key, val) for key, val in init_topics.items()],
-                            axis=1)  # interest over time for each topics
-        related_df = related_df.rolling(7, center=True).mean().reset_index(0)  # rolling average
+        list_topics = [load_term(key, val) for key, val in total_topics.items()]
+        if list_topics:
+            related_df = pd.concat(list_topics, axis=1)  # interest over time for each topics
+            related_df = related_df.rolling(7, center=True).mean().dropna()  # rolling average
 
         # keep the most relevant topics
         out = []
-        for term in init_topics:
-            correlations = [(delay, compute_corr(term, delay, data_be)) for delay in range(0, 17)]
-            best_delay, best_corr = max(correlations, key=lambda x: x[1])
-            out.append((term, best_delay, best_corr))
-        out = list(filter(lambda x: x[2] > threshold, out))  # keep only the most correlated topics
+        for key, val in total_topics.items():
+            correlations = [(delay, compute_corr(key, delay, data_be, related_df)) for delay in range(0, 17)]
+            best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
+            out.append((key, best_delay, best_corr))
+        out = list(filter(lambda x: abs(x[2]) > threshold, out))  # keep only the most correlated topics
         out = [x[0] for x in out]  # keep only the term, not the tuples
-        related_df = related_df[out]
 
-        init_df = pd.concat([init_df, related_df])  # append new topics
+        # if out is empty -> no new topic with a sufficient threshold is added to init_df
+        if out:
+            related_df = related_df[out]
+            init_df = pd.concat([init_df, related_df], axis=1, join='inner')  # append new topics
+            init_df = init_df.loc[:, ~init_df.columns.duplicated()]
+
     return init_df
 
 
@@ -216,6 +233,10 @@ def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
         else:
             fetched = True
     df = pytrends.related_topics()
+
+    if df[term]['rising'].empty:
+        return {}
+
     dic_rising = df[term]['rising'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()['topic_mid']
     dic_top = df[term]['top'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()['topic_mid']
     return {**dic_rising, **dic_top}  # return dic of related topics
@@ -265,38 +286,43 @@ def get_daily_data(word: str,
     # Set up start and stop dates
     start_date = date(start_year, start_mon, 1)
     stop_date = get_last_date_of_month(stop_year, stop_mon)
-    # TODO check if start_date -> stop_date is a whole year or not
-
+    # TODO Check if stop_date-start_year covert a whole year
     # Start pytrends for BE region
     pytrends = TrendReq(hl='fr-BE')
     # Initialize build_payload with the word we need data for
     build_payload = partial(pytrends.build_payload,
                             kw_list=[word], cat=0, geo=geo, gprop='')
 
-    # Obtain monthly data for all months in years [start_year, stop_year]
-    monthly = _fetch_data(pytrends, build_payload,
-                          convert_dates_to_timeframe(start_date, stop_date))
+    if (stop_date - start_date).days >= 365:
+        # Obtain monthly data for all months in years [start_year, stop_year]
+        monthly = _fetch_data(pytrends, build_payload,
+                                      convert_dates_to_timeframe(start_date, stop_date))
 
-    # Get daily data, month by month
-    results = {}
-    # if a timeout or too many requests error occur we need to adjust wait time
-    current = start_date
-    while current < stop_date:
-        last_date_of_month = get_last_date_of_month(current.year, current.month)
-        timeframe = convert_dates_to_timeframe(current, last_date_of_month)
-        if verbose:
-            print(f'{word}:{timeframe}')
-        results[current] = _fetch_data(pytrends, build_payload, timeframe)
-        current = last_date_of_month + timedelta(days=1)
-        sleep(wait_time)  # don't go too fast or Google will send 429s
+        # Get daily data, month by month
+        results = {}
+        # if a timeout or too many requests error occur we need to adjust wait time
+        current = start_date
+        while current < stop_date:
+            last_date_of_month = get_last_date_of_month(current.year, current.month)
+            timeframe = convert_dates_to_timeframe(current, last_date_of_month)
+            if verbose:
+                print(f'{word}:{timeframe}')
+            results[current] = _fetch_data(pytrends, build_payload, timeframe)
+            current = last_date_of_month + timedelta(days=1)
+            sleep(wait_time)  # don't go too fast or Google will send 429s
 
-    daily = pd.concat(results.values()).drop(columns=['isPartial'])
-    complete = daily.join(monthly, lsuffix='_unscaled', rsuffix='_monthly')
+        daily = pd.concat(results.values()).drop(columns=['isPartial'])
+        complete = daily.join(monthly, lsuffix='_unscaled', rsuffix='_monthly')
 
-    # Scale daily data by monthly weights so the data is comparable
-    complete[f'{word}_monthly'].ffill(inplace=True)  # fill NaN values
-    complete['scale'] = complete[f'{word}_monthly'] / 100
-    complete[word] = complete[f'{word}_unscaled'] * complete.scale
+        # Scale daily data by monthly weights so the data is comparable
+        complete[f'{word}_monthly'].ffill(inplace=True)  # fill NaN values
+        complete['scale'] = complete[f'{word}_monthly'] / 100
+        complete[word] = complete[f'{word}_unscaled'] * complete.scale
+
+    else:
+        complete = _fetch_data(pytrends, build_payload,
+                                      convert_dates_to_timeframe(start_date, stop_date))
+
     """ dataframe contains
     - word_unscaled: data with a top 0-100 monthly
     - word_monthly: data with a top 0-100 for start_date to end_date
@@ -305,6 +331,7 @@ def get_daily_data(word: str,
     """
 
     return complete
+
 
 # Own code
 def _dl_term(term, geo="BE-WAL"):
@@ -324,9 +351,6 @@ def load_term(termname, term, geo="BE-WAL"):
     content = content.rename(columns={term: termname})
     content = content.set_index("date")
     return content
-
-
-# In[318]:
 
 
 # French data
@@ -367,15 +391,15 @@ full_data = full_data.reset_index().append(pd.DataFrame(toadd, columns=["DATE", 
     ["LOC", "DATE"])
 
 
-def normalize_hosp_corr(full_data):
+def normalize_hosp_stand(full_data):
     # normalize the hospitalizations between 0 and 1 PER LOC.
     # the goal is to predict peaks/modification of the slope, not numbers.
     full_data = full_data.reset_index()
     full_data["HOSP_CORR"] = full_data.groupby(["LOC"])['HOSP'].transform(lambda x: x / max(x))
 
-    # TODO rename in standardization
     for x in full_data.columns:
         if x not in ["HOSP", "HOSP_CORR", "LOC", "DATE"]:
+            # Standardisation between -1 and 1
             full_data[x] = (full_data.groupby(["LOC"])[x].transform(lambda x: x / max(x)) * 2.0) - 1.0
 
     # Set the final index and sort it
@@ -384,17 +408,16 @@ def normalize_hosp_corr(full_data):
 
 
 # Now we can process the Google trends data
-all_google_data = relevant_pytrends('topics.txt', step=1, start_year=2020, start_mon=2, stop_year=2020, stop_mon=5, verbose=False)
+all_google_data = relevant_pytrends('topics.txt', step=2, start_year=2020, start_mon=2, stop_year=2020, stop_mon=5, verbose=False)
 # TODO modifications done here
-all_google_data = {idx: pd.concat([load_term(key, val, geo=idx) for key, val in terms.items()], axis=1) for idx in
-                   google_geocodes}
+
+#all_google_data = {idx: pd.concat([load_term(key, val, geo=idx) for key, val in terms.items()], axis=1) for idx in
+                   #google_geocodes}
 for loc in all_google_data:
     all_google_data[loc]["LOC"] = google_geocodes[loc]
     all_google_data[loc] = all_google_data[loc].reset_index().rename(columns={"date": "DATE"})
 all_google_data = pd.concat(all_google_data.values())
 all_google_data = all_google_data.groupby(["LOC", "DATE"]).mean()
-# all_google_data -= 50.0
-# all_google_data /= 50.0
 full_data = full_data.groupby(['LOC']).rolling(7, center=True).mean().reset_index(0)
 full_data = all_google_data.join(full_data)
 
@@ -407,15 +430,13 @@ full_data['DATE'] = orig_date
 full_data = full_data.set_index(["LOC", "DATE"])
 full_data = full_data.dropna()
 
-full_data = normalize_hosp_corr(full_data)
-full_data_no_rolling = normalize_hosp_corr(full_data_no_rolling)
+full_data = normalize_hosp_stand(full_data)
+full_data_no_rolling = normalize_hosp_stand(full_data_no_rolling)
 
 # add a normalized weekday to the data
 # full_data.insert(0, "weekday", full_data.apply(lambda row: datetime.strptime(row.name[1], "%Y-%m-%d").weekday()/3.5 - 1.0, axis = 1))
 
 full_data
-
-# In[320]:
 
 
 # Now we create keras datasets for each LOC
@@ -472,11 +493,8 @@ else:
     valid_datapoints = {loc: full_datapoints[loc] for loc in all_locs[train_len:train_len + valid_len]}
     test_datapoints = {loc: full_datapoints[loc] for loc in all_locs[train_len + valid_len:]}
 
+
 # # Toy model
-
-# In[321]:
-
-
 model = Sequential()
 model.add(LSTM(32, return_sequences=True, input_shape=(None, n_features)))
 model.add(LSTM(1, return_sequences=True))
@@ -503,8 +521,6 @@ model.compile(loss="mse", optimizer='adam')
 history = model.fit(train_generator(), steps_per_epoch=len(train_datapoints), epochs=400, verbose=1, shuffle=False,
                     validation_data=validation_generator(),
                     validation_steps=len(valid_datapoints))
-
-# In[322]:
 
 
 for loc in train_datapoints:
@@ -535,8 +551,6 @@ for loc in test_datapoints:
     plt.show()
 
 # # Let's use the validation set
-
-# In[246]:
 
 
 import talos

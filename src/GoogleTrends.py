@@ -500,7 +500,7 @@ def find_correlated(cases, queries: list = None, topics: dict = None, correlatio
         if iteration != 0:
             correlation_batch = correlation_header.copy(True)  # batch of keywords for each iteration
             for word in keywords_new:  # add the new keywords
-                time.sleep(random())
+                time.sleep(random() + random())
                 pytrends.build_payload([word], cat=cat, timeframe=timeframe, geo=geo, gprop='')
                 for i in range(2):
                     if i == 0:  # related queries
@@ -597,13 +597,13 @@ if __name__ == "__main__":
     # write_related_topics(extract_topics(toList=True) + extract_queries())
     # trends_to_csv(extract_queries(["queries_generated.txt", "symptoms.txt"]) + extract_topics(["topics_generated.txt", "topics.txt"], True))
     # spearman_hospitalization('search_trends.csv', 'hospitalization.csv')
-    """cases = hospitalization_vector("hospitalization.csv")
+    cases = hospitalization_vector("hospitalization.csv")
     queries = extract_queries()
     topics = extract_topics()
-    find_correlated(cases, queries=queries, topics=topics, max_iter=1)"""
-    prediction_hospitalizations('correlation_3.csv', n=5, days=0, abs_val=True, date_begin='2020-03-15', date_end='2020-07-13')
-    prediction_hospitalizations('correlation_3.csv', n=5, days=1, abs_val=True, date_begin='2020-03-15', date_end='2020-07-13')
-    prediction_hospitalizations('correlation_3.csv', n=5, days=2, abs_val=True, date_begin='2020-03-15', date_end='2020-07-13')
-    prediction_hospitalizations('correlation_3.csv', n=5, days=3, abs_val=True, date_begin='2020-03-15', date_end='2020-07-13')
-    prediction_hospitalizations('correlation_3.csv', n=5, days=4, abs_val=True, date_begin='2020-03-15', date_end='2020-07-13')
+    find_correlated(cases, queries=queries, topics=topics, max_iter=1)
+    #prediction_hospitalizations('correlation_3.csv', n=5, days=0, abs_val=True, date_begin='2020-03-15', date_end='2020-08-11')
+    #prediction_hospitalizations('correlation_3.csv', n=5, days=1, abs_val=True, date_begin='2020-03-15', date_end='2020-07-16')
+    #prediction_hospitalizations('correlation_3.csv', n=5, days=2, abs_val=True, date_begin='2020-03-15', date_end='2020-07-17')
+    #prediction_hospitalizations('correlation_3.csv', n=5, days=3, abs_val=True, date_begin='2020-03-15', date_end='2020-07-16')
+    #prediction_hospitalizations('correlation_3.csv', n=5, days=4, abs_val=True, date_begin='2020-03-15', date_end='2020-07-16')
 
