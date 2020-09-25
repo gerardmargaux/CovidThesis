@@ -1,5 +1,5 @@
-/m/0cjf0 Fièvre
-/m/0b76bty Mal de gorge
-/m/01cdt5 Dyspnée
-/m/05sfr2 Agueusie
-/m/0m7pl Anosmie
+Fièvre /m/0cjf0
+Mal de gorge /m/0b76bty
+Dyspnée /m/01cdt5
+Agueusie /m/05sfr2
+Anosmie /m/0m7pl
