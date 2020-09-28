@@ -2,14 +2,14 @@
 # coding: utf-8
 
 # In[195]:
-
+import csv
 
 import pandas as pd
 from pytrends.dailydata import get_daily_data
 import os.path
 import numpy as np
 import matplotlib.pyplot as plt
-from pandas import read_csv
+from pandas import read_csv, Series
 import math
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -110,7 +110,7 @@ def relevant_pytrends(init_file,
                       verbose: bool = True,
                       wait_time: float = 5.0,
                       step=0,
-                      threshold=0.8):
+                      threshold=0.65):
     """
     get the relevant google trends
     :param init_file: init file of keywords
@@ -142,11 +142,13 @@ def relevant_pytrends(init_file,
     for key, val in init_topics.items():
         correlations = [(delay, compute_corr(key, delay, data_be, init_df)) for delay in range(0, 17)]
         best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
-        out.append((key, best_delay, best_corr))
-    out = list(filter(lambda x: abs(x[2]) > threshold, out))  # keep only the most correlated topics
+        out.append((key, val, best_delay, best_corr))
+    out = list(filter(lambda x: abs(x[3]) > threshold, out))  # keep only the most correlated topics
     out = [x[0] for x in out]  # keep only the term, not the tuples
 
     init_df = init_df[out]  # filter the df
+    df = pd.DataFrame(columns=("Topic_title", "Topic_mid", "Best delay", "Best correlation"))
+
     for i in range(step):
         total_topics = {}
         for term in out:
@@ -169,8 +171,14 @@ def relevant_pytrends(init_file,
         for key, val in total_topics.items():
             correlations = [(delay, compute_corr(key, delay, data_be, related_df)) for delay in range(0, 17)]
             best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
-            out.append((key, best_delay, best_corr))
-        out = list(filter(lambda x: abs(x[2]) > threshold, out))  # keep only the most correlated topics
+            out.append([key, val, best_delay, best_corr])
+
+        j = len(df)
+        for topics in out:
+            df.loc[j] = topics
+            j += 1
+
+        out = list(filter(lambda x: abs(x[3]) > threshold, out))  # keep only the most correlated topics
         out = [x[0] for x in out]  # keep only the term, not the tuples
 
         # if out is empty -> no new topic with a sufficient threshold is added to init_df
@@ -179,7 +187,29 @@ def relevant_pytrends(init_file,
             init_df = pd.concat([init_df, related_df], axis=1, join='inner')  # append new topics
             init_df = init_df.loc[:, ~init_df.columns.duplicated()]
 
-    return init_df
+    df.drop_duplicates(subset='Topic_title', keep='first', inplace=True)
+    df.reset_index(0, inplace=True, drop=True)
+    df.to_csv('../data/trends/explore/related_topics.csv')
+
+
+def get_best_topics(filename='../data/trends/explore/related_topics.csv', number=15):
+    """
+    Gets the first best topics sorted with respect to the correlation.
+    :param filename: path to the file where all the topics generated are stocked
+    :param number: number of best topics that we keep
+    :return: a dictionary containing topic_title:topic_mid pairs
+    """
+    df = pd.read_csv(filename)
+    df['Best correlation'] = df['Best correlation'].abs()
+    df.sort_values('Best correlation', ascending=False, inplace=True)
+    df = df[['Topic_title', 'Topic_mid']]
+    list_topics = df.to_dict('split')['data']
+
+    dict = {}
+    for i in range(min(number, len(list_topics))):
+        dict[list_topics[i][0]] = list_topics[i][1]
+
+    return dict
 
 
 def get_last_date_of_month(year: int, month: int) -> date:
@@ -218,6 +248,7 @@ def _fetch_data(pytrends, build_payload, timeframe: str) -> pd.DataFrame:
 
 
 def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
+    """ Attempts to get the related topics of a particular term and retries in case of ResponseError"""
     attempts, fetched = 0, False
     while not fetched:
         try:
@@ -286,7 +317,7 @@ def get_daily_data(word: str,
     # Set up start and stop dates
     start_date = date(start_year, start_mon, 1)
     stop_date = get_last_date_of_month(stop_year, stop_mon)
-    # TODO Check if stop_date-start_year covert a whole year
+
     # Start pytrends for BE region
     pytrends = TrendReq(hl='fr-BE')
     # Initialize build_payload with the word we need data for
@@ -334,17 +365,17 @@ def get_daily_data(word: str,
 
 
 # Own code
-def _dl_term(term, geo="BE-WAL"):
-    df = get_daily_data(term, start_year=2020, start_mon=2, stop_year=2020, stop_mon=5, geo=geo, verbose=False)
+def _dl_term(term, geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=5):
+    df = get_daily_data(term, start_year=start_year, start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon, geo=geo, verbose=False)
     return df[term].copy()
 
 
-def load_term(termname, term, geo="BE-WAL"):
-    path = f"../data/trends/{geo}-{termname}.csv"
+def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=5):
+    path = f"{dir}{geo}-{termname}.csv"
 
     if not os.path.exists(path):
         print(f"DL {geo} {termname}")
-        content = _dl_term(term)
+        content = _dl_term(term, start_year=2020, start_mon=2, stop_year=2020, stop_mon=5)
         content.to_csv(path)
 
     content = pd.read_csv(path)
@@ -408,17 +439,19 @@ def normalize_hosp_stand(full_data):
 
 
 # Now we can process the Google trends data
-all_google_data = relevant_pytrends('topics.txt', step=2, start_year=2020, start_mon=2, stop_year=2020, stop_mon=5, verbose=False)
-# TODO modifications done here
-
-#all_google_data = {idx: pd.concat([load_term(key, val, geo=idx) for key, val in terms.items()], axis=1) for idx in
-                   #google_geocodes}
+relevant_pytrends('topics.txt', step=1, start_year=2020, start_mon=2, stop_year=2020, stop_mon=8, verbose=False)
+terms = get_best_topics()
+all_google_data = {idx: pd.concat([load_term(key, val, dir="../data/trends/model/", geo=idx, start_year=2020,
+                                             start_mon=2, stop_year=2020, stop_mon=8) for key, val in terms.items()],
+                                             axis=1) for idx in google_geocodes}
 for loc in all_google_data:
     all_google_data[loc]["LOC"] = google_geocodes[loc]
     all_google_data[loc] = all_google_data[loc].reset_index().rename(columns={"date": "DATE"})
+
 all_google_data = pd.concat(all_google_data.values())
 all_google_data = all_google_data.groupby(["LOC", "DATE"]).mean()
-full_data = full_data.groupby(['LOC']).rolling(7, center=True).mean().reset_index(0)
+#all_google_data -= 50.0
+#all_google_data /= 50.0
 full_data = all_google_data.join(full_data)
 
 full_data_no_rolling = full_data.copy().dropna()
@@ -426,6 +459,7 @@ full_data_no_rolling = full_data.copy().dropna()
 # Rolling average
 full_data = full_data.reset_index()
 orig_date = full_data.DATE
+full_data = full_data.groupby(['LOC']).rolling(7, center=True).mean().reset_index(0)
 full_data['DATE'] = orig_date
 full_data = full_data.set_index(["LOC", "DATE"])
 full_data = full_data.dropna()
