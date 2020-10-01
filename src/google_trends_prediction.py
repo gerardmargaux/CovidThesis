@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[195]:
 import csv
-
 import pandas as pd
+from tensorflow import keras
 from pytrends.dailydata import get_daily_data
 import os.path
 import numpy as np
+import talos
 import matplotlib.pyplot as plt
 from pandas import read_csv, Series
 import math
@@ -371,6 +371,10 @@ def _dl_term(term, geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, s
 
 
 def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=5):
+
+    if "/" in termname:
+        termname = termname.replace("/", "-")
+
     path = f"{dir}{geo}-{termname}.csv"
 
     if not os.path.exists(path):
@@ -439,10 +443,10 @@ def normalize_hosp_stand(full_data):
 
 
 # Now we can process the Google trends data
-relevant_pytrends('topics.txt', step=1, start_year=2020, start_mon=2, stop_year=2020, stop_mon=8, verbose=False)
+relevant_pytrends('topics.txt', step=1, start_year=2020, start_mon=2, stop_year=2020, stop_mon=9, verbose=False)
 terms = get_best_topics()
 all_google_data = {idx: pd.concat([load_term(key, val, dir="../data/trends/model/", geo=idx, start_year=2020,
-                                             start_mon=2, stop_year=2020, stop_mon=8) for key, val in terms.items()],
+                                             start_mon=2, stop_year=2020, stop_mon=9) for key, val in terms.items()],
                                              axis=1) for idx in google_geocodes}
 for loc in all_google_data:
     all_google_data[loc]["LOC"] = google_geocodes[loc]
@@ -450,8 +454,6 @@ for loc in all_google_data:
 
 all_google_data = pd.concat(all_google_data.values())
 all_google_data = all_google_data.groupby(["LOC", "DATE"]).mean()
-#all_google_data -= 50.0
-#all_google_data /= 50.0
 full_data = all_google_data.join(full_data)
 
 full_data_no_rolling = full_data.copy().dropna()
@@ -587,9 +589,6 @@ for loc in test_datapoints:
 # # Let's use the validation set
 
 
-import talos
-
-
 def run_model(_, _2, _3, _4, p):
     model = Sequential()
     model.add(LSTM(p["n_lstm_node_first"], return_sequences=True, input_shape=(None, n_features),
@@ -619,10 +618,17 @@ def run_model(_, _2, _3, _4, p):
     history = model.fit(train_generator(), steps_per_epoch=len(train_datapoints), epochs=p["epochs"], verbose=0,
                         shuffle=False,
                         validation_data=validation_generator(),
-                        validation_steps=len(valid_datapoints))
+                        validation_steps=len(valid_datapoints), callbacks=[cp_callback])
 
     return history, model
 
+
+checkpoint_path = "../data/trends/checkpoint.ckpt"
+
+# Create a callback that saves the model's weights
+cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                 save_weights_only=True,
+                                                 verbose=1)
 
 p = {'activation': ['relu', 'elu', 'sigmoid'],
      'n_layers_after': [0, 1, 2],
@@ -635,6 +641,7 @@ p = {'activation': ['relu', 'elu', 'sigmoid'],
      'losses': ['mae', 'mse'],
      'epochs': [300, 500],
      }
+
 scan_object = talos.Scan(
     x=[],
     y=[],
@@ -646,8 +653,6 @@ scan_object = talos.Scan(
     fraction_limit=0.01
 )
 
-# In[310]:
-
 
 analyze_object = talos.Analyze(scan_object)
 print("MAE", analyze_object.low('mae'))
@@ -655,9 +660,6 @@ print("MSE", analyze_object.low('mse'))
 print("VAL MAE", analyze_object.low('val_mae'))
 print("VAL MSE", analyze_object.low('val_mse'))
 analyze_object.table('val_mse', exclude=[], ascending=True)
-
-# In[309]:
-
 
 best_model = scan_object.best_model('val_mse', asc=True)
 
