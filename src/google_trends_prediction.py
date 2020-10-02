@@ -365,12 +365,15 @@ def get_daily_data(word: str,
 
 
 # Own code
-def _dl_term(term, geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=5):
+def _dl_term(term, geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=9):
     df = get_daily_data(term, start_year=start_year, start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon, geo=geo, verbose=False)
-    return df[term].copy()
+    if df.empty:
+        return df
+    else:
+        return df[term].copy()
 
 
-def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=5):
+def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=9):
 
     if "/" in termname:
         termname = termname.replace("/", "-")
@@ -379,7 +382,7 @@ def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", star
 
     if not os.path.exists(path):
         print(f"DL {geo} {termname}")
-        content = _dl_term(term, start_year=2020, start_mon=2, stop_year=2020, stop_mon=5)
+        content = _dl_term(term, start_year=2020, start_mon=2, stop_year=2020, stop_mon=9)
         content.to_csv(path)
 
     content = pd.read_csv(path)
@@ -615,20 +618,15 @@ def run_model(_, _2, _3, _4, p):
                 yield valid_datapoints[loc]
 
     model.compile(loss=p["losses"], optimizer=p["optimizer"], metrics=['mae', 'mse'])
+
     history = model.fit(train_generator(), steps_per_epoch=len(train_datapoints), epochs=p["epochs"], verbose=0,
                         shuffle=False,
                         validation_data=validation_generator(),
-                        validation_steps=len(valid_datapoints), callbacks=[cp_callback])
+                        validation_steps=len(valid_datapoints))
+    model.save(save_model)
 
     return history, model
 
-
-checkpoint_path = "../data/trends/checkpoint.ckpt"
-
-# Create a callback that saves the model's weights
-cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
-                                                 save_weights_only=True,
-                                                 verbose=1)
 
 p = {'activation': ['relu', 'elu', 'sigmoid'],
      'n_layers_after': [0, 1, 2],
@@ -642,17 +640,47 @@ p = {'activation': ['relu', 'elu', 'sigmoid'],
      'epochs': [300, 500],
      }
 
-scan_object = talos.Scan(
-    x=[],
-    y=[],
-    x_val=[],
-    y_val=[],
-    params=p,
-    model=run_model,
-    experiment_name='trends1',
-    fraction_limit=0.01
-)
+save_model = "../data/trends/saved_model.hd5"
 
+# Create a callback that saves the model's weights
+#cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                 #save_weights_only=True,
+                                                 #verbose=1)
+
+"""if not os.path.exists(save_model):
+    scan_object = talos.Scan(
+        x=[],
+        y=[],
+        x_val=[],
+        y_val=[],
+        params=p,
+        model=run_model,
+        experiment_name='trends1',
+        fraction_limit=0.01
+    )
+
+else:
+    scan_object = talos.Scan(
+        x=[],
+        y=[],
+        x_val=[],
+        y_val=[],
+        params=p,
+        model=tf.keras.models.load_model(save_model),
+        experiment_name='trends1',
+        fraction_limit=0.01
+    )"""
+
+scan_object = talos.Scan(
+        x=[],
+        y=[],
+        x_val=[],
+        y_val=[],
+        params=p,
+        model=tf.keras.models.load_model(save_model),
+        experiment_name='trends1',
+        fraction_limit=0.01
+    )
 
 analyze_object = talos.Analyze(scan_object)
 print("MAE", analyze_object.low('mae'))
