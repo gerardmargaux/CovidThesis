@@ -378,7 +378,6 @@ def _dl_term(term, geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, s
 
 
 def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=9):
-
     if "/" in termname:
         termname = termname.replace("/", "-")
 
@@ -434,8 +433,10 @@ full_data = full_data.reset_index().append(pd.DataFrame(toadd, columns=["DATE", 
 
 
 def normalize_hosp_stand(full_data):
-    # normalize the hospitalizations between 0 and 1 PER LOC.
-    # the goal is to predict peaks/modification of the slope, not numbers.
+    """
+    Normalizes and standardizes the number of new hospitalizations between 0 and 1 PER LOC.
+    The goal is to predict peaks/modification of the slope, not numbers.
+    """
     full_data = full_data.reset_index()
     full_data["HOSP_CORR"] = full_data.groupby(["LOC"])['HOSP'].transform(lambda x: x / max(x))
 
@@ -475,9 +476,6 @@ full_data = full_data.dropna()
 
 full_data = normalize_hosp_stand(full_data)
 full_data_no_rolling = normalize_hosp_stand(full_data_no_rolling)
-
-# add a normalized weekday to the data
-# full_data.insert(0, "weekday", full_data.apply(lambda row: datetime.strptime(row.name[1], "%Y-%m-%d").weekday()/3.5 - 1.0, axis = 1))
 
 full_data
 
@@ -597,6 +595,16 @@ for loc in test_datapoints:
 
 
 def saved_model(_, _2, _3, _4, p):
+    """
+    Trains the sequential model with all the train_datapoints and saves this model.
+    :param _: X training datapoints
+    :param _2: Y training datapoints
+    :param _3: X validation datapoints
+    :param _4: Y validation datapoints
+    :param p: hyper parameters to evaluate
+    :return: history : a history object containing a dictionary of all loss values and other metric values.
+    :return: model : the sequential trained model
+    """
 
     def train_generator():
         while True:
@@ -612,6 +620,11 @@ def saved_model(_, _2, _3, _4, p):
             for loc in valid_datapoints:
                 yield valid_datapoints[loc]
 
+    session_conf = tf.ConfigProto(intra_op_parallelism_threads=8, inter_op_parallelism_threads=8)
+    tf.set_random_seed(1)
+    sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+    keras.backend.set_session(sess)
+
     model = Sequential()
     model.add(LSTM(p["n_lstm_node_first"], return_sequences=True, input_shape=(None, n_features),
                    kernel_regularizer=p['reg'](p['regw'])))
@@ -624,6 +637,8 @@ def saved_model(_, _2, _3, _4, p):
 
     model.compile(loss=p["losses"], optimizer=p["optimizer"], metrics=['mae', 'mse'])
 
+    # With TensorFlow version 2.2 or higher, the fit function works exactly as the fit_generator function
+    # Not everything is stocked into the RAM
     history = model.fit(train_generator(), steps_per_epoch=len(train_datapoints), epochs=p["epochs"], verbose=0,
                         shuffle=False,
                         validation_data=validation_generator(),
@@ -632,31 +647,22 @@ def saved_model(_, _2, _3, _4, p):
     with open('../data/trends/training.log', 'wb') as file_pi:
         pickle.dump(history.history, file_pi)
 
-    """# serialize model to JSON
-    model_json = model.to_json()
-    with open("../data/trends/model.json", "w") as json_file:
-        json_file.write(model_json)
-
-    # serialize weights to HDF5
-    model.save_weights("../data/trends/model.h5")
-    print("Saved model to disk")"""
-
     tf.keras.models.save_model(model=model, filepath=save_model)
 
     return history, model
 
 
 def loaded_model(_, _2, _3, _4, p):
-
-    """json_file = open('../data/trends/model.json', 'r')
-    loaded_model_json = json_file.read()
-    json_file.close()
-    model = model_from_json(loaded_model_json)
-    # load weights into new model
-    model.load_weights("../data/trends/model.h5")
-    print("Loaded model from disk")
-
-    model.compile(loss=p["losses"], optimizer=p["optimizer"], metrics=['mae', 'mse'])"""
+    """
+    Loads the sequential model saved previously.
+    :param _: X training datapoints
+    :param _2: Y training datapoints
+    :param _3: X validation datapoints
+    :param _4: Y validation datapoints
+    :param p: hyper parameters to evaluate
+    :return: history : a history object containing a dictionary of all loss values and other metric values.
+    :return: model : the sequential trained model
+    """
 
     model = load_model(save_model)
 
@@ -679,6 +685,7 @@ p = {'activation': ['relu', 'elu', 'sigmoid'],
 
 save_model = "../data/trends/saved_model"
 
+# If no model is saved, we need to train the entire model
 if not os.path.exists(save_model):
     scan_object = talos.Scan(
             x=[],
@@ -691,6 +698,7 @@ if not os.path.exists(save_model):
             fraction_limit=0.01
         )
 
+# If a model is already saved, we load it
 else:
     scan_object = talos.Scan(
             x=[],
