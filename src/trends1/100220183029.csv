@@ -1,0 +1,1 @@
+round_epochs,activation,epochs,losses,n_layers_after,n_lstm_node_first,n_lstm_node_second,n_node_hidden_layers,optimizer,reg,regw

@@ -1,0 +1,2 @@
+round_epochs,loss,mean_absolute_error,mean_squared_error,val_loss,val_mean_absolute_error,val_mean_squared_error,activation,epochs,losses,n_layers_after,n_lstm_node_first,n_lstm_node_second,n_node_hidden_layers,optimizer,reg,regw
+500,0.05266602709889412,0.0440308079123497,0.004890996962785721,0.06409821659326553,0.05547226220369339,0.010628308169543743,elu,500,mae,2,30,30,50,sgd,<function <lambda> at 0x14fea8f80>,0.001

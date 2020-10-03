@@ -1,0 +1,2 @@
+round_epochs,loss,mae,mse,val_loss,val_mae,val_mse,activation,epochs,losses,n_layers_after,n_lstm_node_first,n_lstm_node_second,n_node_hidden_layers,optimizer,reg,regw
+300,0.1251782476902008,0.07334337383508682,0.011084839701652527,0.12393376231193542,0.0720987468957901,0.01181658636778593,relu,300,mae,1,30,20,10,sgd,<function <lambda> at 0x15134f4d0>,0.0001

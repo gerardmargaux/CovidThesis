@@ -19,6 +19,10 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 from datetime import date, datetime, timedelta
 import re
+import pickle
+
+from tensorflow.python.keras.callbacks import CSVLogger
+from tensorflow.python.keras.models import model_from_json, load_model
 
 np.random.seed(7)
 
@@ -592,16 +596,7 @@ for loc in test_datapoints:
 # # Let's use the validation set
 
 
-def run_model(_, _2, _3, _4, p):
-    model = Sequential()
-    model.add(LSTM(p["n_lstm_node_first"], return_sequences=True, input_shape=(None, n_features),
-                   kernel_regularizer=p['reg'](p['regw'])))
-    if p["n_lstm_node_second"] != 0:
-        model.add(LSTM(p["n_lstm_node_second"], return_sequences=True, kernel_regularizer=p['reg'](p['regw'])))
-    for _ in range(p["n_layers_after"]):
-        model.add(TimeDistributed(Dense(p["n_node_hidden_layers"], kernel_regularizer=p['reg'](p['regw']),
-                                        activation=p['activation'])))
-    model.add(TimeDistributed(Dense(1, kernel_regularizer=p['reg'](p['regw']))))
+def saved_model(_, _2, _3, _4, p):
 
     def train_generator():
         while True:
@@ -617,13 +612,55 @@ def run_model(_, _2, _3, _4, p):
             for loc in valid_datapoints:
                 yield valid_datapoints[loc]
 
+    model = Sequential()
+    model.add(LSTM(p["n_lstm_node_first"], return_sequences=True, input_shape=(None, n_features),
+                   kernel_regularizer=p['reg'](p['regw'])))
+    if p["n_lstm_node_second"] != 0:
+        model.add(LSTM(p["n_lstm_node_second"], return_sequences=True, kernel_regularizer=p['reg'](p['regw'])))
+    for _ in range(p["n_layers_after"]):
+        model.add(TimeDistributed(Dense(p["n_node_hidden_layers"], kernel_regularizer=p['reg'](p['regw']),
+                                        activation=p['activation'])))
+    model.add(TimeDistributed(Dense(1, kernel_regularizer=p['reg'](p['regw']))))
+
     model.compile(loss=p["losses"], optimizer=p["optimizer"], metrics=['mae', 'mse'])
 
     history = model.fit(train_generator(), steps_per_epoch=len(train_datapoints), epochs=p["epochs"], verbose=0,
                         shuffle=False,
                         validation_data=validation_generator(),
                         validation_steps=len(valid_datapoints))
-    model.save(save_model)
+
+    with open('../data/trends/training.log', 'wb') as file_pi:
+        pickle.dump(history.history, file_pi)
+
+    """# serialize model to JSON
+    model_json = model.to_json()
+    with open("../data/trends/model.json", "w") as json_file:
+        json_file.write(model_json)
+
+    # serialize weights to HDF5
+    model.save_weights("../data/trends/model.h5")
+    print("Saved model to disk")"""
+
+    tf.keras.models.save_model(model=model, filepath=save_model)
+
+    return history, model
+
+
+def loaded_model(_, _2, _3, _4, p):
+
+    """json_file = open('../data/trends/model.json', 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+    model = model_from_json(loaded_model_json)
+    # load weights into new model
+    model.load_weights("../data/trends/model.h5")
+    print("Loaded model from disk")
+
+    model.compile(loss=p["losses"], optimizer=p["optimizer"], metrics=['mae', 'mse'])"""
+
+    model = load_model(save_model)
+
+    history.history = pickle.load(open('../data/trends/training.log', "rb"))
 
     return history, model
 
@@ -640,47 +677,31 @@ p = {'activation': ['relu', 'elu', 'sigmoid'],
      'epochs': [300, 500],
      }
 
-save_model = "../data/trends/saved_model.hd5"
+save_model = "../data/trends/saved_model"
 
-# Create a callback that saves the model's weights
-#cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
-                                                 #save_weights_only=True,
-                                                 #verbose=1)
-
-"""if not os.path.exists(save_model):
+if not os.path.exists(save_model):
     scan_object = talos.Scan(
-        x=[],
-        y=[],
-        x_val=[],
-        y_val=[],
-        params=p,
-        model=run_model,
-        experiment_name='trends1',
-        fraction_limit=0.01
-    )
+            x=[],
+            y=[],
+            x_val=[],
+            y_val=[],
+            params=p,
+            model=saved_model,
+            experiment_name='trends1',
+            fraction_limit=0.01
+        )
 
 else:
     scan_object = talos.Scan(
-        x=[],
-        y=[],
-        x_val=[],
-        y_val=[],
-        params=p,
-        model=tf.keras.models.load_model(save_model),
-        experiment_name='trends1',
-        fraction_limit=0.01
-    )"""
-
-scan_object = talos.Scan(
-        x=[],
-        y=[],
-        x_val=[],
-        y_val=[],
-        params=p,
-        model=tf.keras.models.load_model(save_model),
-        experiment_name='trends1',
-        fraction_limit=0.01
-    )
+            x=[],
+            y=[],
+            x_val=[],
+            y_val=[],
+            params=p,
+            model=loaded_model,
+            experiment_name='trends1',
+            fraction_limit=0.01
+        )
 
 analyze_object = talos.Analyze(scan_object)
 print("MAE", analyze_object.low('mae'))
