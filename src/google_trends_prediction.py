@@ -6,6 +6,7 @@ import pandas as pd
 from tensorflow import keras
 from pytrends.dailydata import get_daily_data
 import os.path
+from os import listdir
 import numpy as np
 import talos
 import matplotlib.pyplot as plt
@@ -20,6 +21,8 @@ from sklearn.metrics import mean_squared_error
 from datetime import date, datetime, timedelta
 import re
 import pickle
+import random
+import glob
 
 from tensorflow.python.keras.callbacks import CSVLogger
 from tensorflow.python.keras.models import model_from_json, load_model
@@ -114,7 +117,7 @@ def relevant_pytrends(init_file,
                       verbose: bool = True,
                       wait_time: float = 5.0,
                       step=0,
-                      threshold=0.65):
+                      threshold=0.8):
     """
     get the relevant google trends
     :param init_file: init file of keywords
@@ -142,6 +145,7 @@ def relevant_pytrends(init_file,
         cur += timedelta(days=1)
     data_be = data_be.reset_index().append(pd.DataFrame(toadd, columns=["DATE", "HOSP"])).set_index("DATE")
 
+
     out = []
     for key, val in init_topics.items():
         correlations = [(delay, compute_corr(key, delay, data_be, init_df)) for delay in range(0, 17)]
@@ -154,6 +158,7 @@ def relevant_pytrends(init_file,
     df = pd.DataFrame(columns=("Topic_title", "Topic_mid", "Best delay", "Best correlation"))
 
     for i in range(step):
+        print(f"STEP {i+1}")
         total_topics = {}
         for term in out:
             pytrends = TrendReq(hl='fr-BE')
@@ -166,9 +171,13 @@ def relevant_pytrends(init_file,
 
         # evaluate new topics over time
         list_topics = [load_term(key, val) for key, val in total_topics.items()]
+        total_keys = list(total_topics.keys())
         if list_topics:
             related_df = pd.concat(list_topics, axis=1)  # interest over time for each topics
             related_df = related_df.rolling(7, center=True).mean().dropna()  # rolling average
+            for key in total_keys:
+                if key not in related_df.keys():
+                    del total_topics[key]
 
         # keep the most relevant topics
         out = []
@@ -194,6 +203,44 @@ def relevant_pytrends(init_file,
     df.drop_duplicates(subset='Topic_title', keep='first', inplace=True)
     df.reset_index(0, inplace=True, drop=True)
     df.to_csv('../data/trends/explore/related_topics.csv')
+
+
+def find_colleration_explore():
+    """
+    find the delay leading to the maximum correlation between every topic in the folder explore and the number of
+    hospitalisations
+    :return:
+    """
+    data_be = pd.read_csv("be-covid-hospi.csv").groupby(["DATE"]).agg({"NEW_IN": "sum"}).rename(
+        columns={"NEW_IN": "HOSP"})  # data for belgium
+    data_be = data_be.rolling(7, center=True).mean().dropna()
+    df = pd.DataFrame(columns=("Topic_title", "Topic_mid", "Best delay", "Best correlation"))
+
+    count = 0
+    dir = "../data/trends/explore"
+    for file in listdir("../data/trends/explore"):
+        search_obj = re.search('BE-WAL-(.*).csv', file)
+        if search_obj is not None:
+            topic_df = pd.read_csv(os.path.join(dir, file))
+            topic_df = topic_df.set_index("date")
+
+            if count == 0:  # Add "fake" data (zeroes before the beginning of the crisis) for the hospitalisations
+                toadd = []
+                min_index = data_be.index.min()
+                end = datetime.strptime(min_index, "%Y-%m-%d").date()
+                min_index_init_df = topic_df.index.min()
+                cur = datetime.strptime(min_index_init_df, "%Y-%m-%d").date()
+                while cur != end:
+                    toadd.append([cur.strftime("%Y-%m-%d"), 0])
+                    cur += timedelta(days=1)
+                data_be = data_be.reset_index().append(pd.DataFrame(toadd, columns=["DATE", "HOSP"])).set_index("DATE")
+
+            topic_df = topic_df.rolling(7, center=True).mean().dropna()
+            correlations = [(delay, compute_corr(topic_df.keys()[0], delay, data_be, topic_df)) for delay in range(0, 17)]
+            best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
+            df.loc[count] = [search_obj.group(), topic_df.keys()[0], best_delay, best_corr]
+            count += 1
+    df.to_csv('../data/trends/explore/related_topics.csv', index=False)
 
 
 def get_best_topics(filename='../data/trends/explore/related_topics.csv', number=15):
@@ -268,6 +315,8 @@ def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
         else:
             fetched = True
     df = pytrends.related_topics()
+
+    term = term.replace('(', ' ').replace(')', '').replace("'", '')
 
     if df[term]['rising'].empty:
         return {}
@@ -378,14 +427,19 @@ def _dl_term(term, geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, s
 
 
 def load_term(termname, term,  dir="../data/trends/explore/", geo="BE-WAL", start_year=2020, start_mon=2, stop_year=2020, stop_mon=9):
-    if "/" in termname:
-        termname = termname.replace("/", "-")
 
-    path = f"{dir}{geo}-{termname}.csv"
+    if "/" in termname:
+        termname_path = termname.replace("/", "-")
+    else:
+        termname_path = termname
+
+    path = f"{dir}{geo}-{termname_path}.csv"
 
     if not os.path.exists(path):
         print(f"DL {geo} {termname}")
-        content = _dl_term(term, start_year=2020, start_mon=2, stop_year=2020, stop_mon=9)
+        content = _dl_term(term, start_year=start_year, start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon)
+        if content.empty:
+            return content
         content.to_csv(path)
 
     content = pd.read_csv(path)
@@ -451,7 +505,8 @@ def normalize_hosp_stand(full_data):
 
 
 # Now we can process the Google trends data
-relevant_pytrends('topics.txt', step=1, start_year=2020, start_mon=2, stop_year=2020, stop_mon=9, verbose=False)
+find_colleration_explore()
+#relevant_pytrends('topics.txt', step=1, start_year=2020, start_mon=2, stop_year=2020, stop_mon=9, verbose=False)
 terms = get_best_topics()
 all_google_data = {idx: pd.concat([load_term(key, val, dir="../data/trends/model/", geo=idx, start_year=2020,
                                              start_mon=2, stop_year=2020, stop_mon=9) for key, val in terms.items()],
