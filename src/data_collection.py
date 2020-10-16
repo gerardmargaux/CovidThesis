@@ -524,11 +524,12 @@ def normalize_hosp_stand(full_data):
     return full_data.drop(columns=["HOSP"])
 
 
-def google_trends_process(full_data, start_year, start_mon, stop_year, stop_mon, step=1, data_collection=True):
+def google_trends_process(full_data, terms, start_year, start_mon, stop_year, stop_mon, step=1, data_collection=True):
     """
     Processes the Google trends data : drop NA values, smoothing, set/reset index and normalization
     :param full_data: dataframe containing the trends for each symptom and the number of new hospitalizations
     with respect to the date and the localisation
+    :param terms: dictionary of topics to use
     :param start_year: year of the start date
     :param start_mon: month of the start date
     :param stop_year: year of the stop date
@@ -542,7 +543,9 @@ def google_trends_process(full_data, start_year, start_mon, stop_year, stop_mon,
         relevant_pytrends('topics.txt', step=step, start_year=start_year, start_mon=start_mon, stop_year=stop_year,
                           stop_mon=stop_mon, verbose=False)
 
-    terms = get_best_topics()
+    if terms is None:
+        terms = get_best_topics()
+
     all_google_data = {idx: pd.concat([load_term(key, val, dir="../data/trends/model/", geo=idx, start_year=start_year,
                                                  start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon) for
                                        key, val in terms.items()], axis=1) for idx in google_geocodes}
