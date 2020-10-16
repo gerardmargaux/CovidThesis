@@ -48,7 +48,7 @@ def extract_topics(filename="topics.txt", to_list=False):
     :return: dictionary of {topic_title: topic_mid} for each topic provided
     """
     results = {}
-    pattern = "(.+)\s(/m/.+)"
+    pattern = "(.+)\s(/[mg]/.+)"
     if isinstance(filename, str):
         filename2 = [filename]
     else:
@@ -212,7 +212,7 @@ def find_correlation_explore(file_hospi="be-covid-hospi.csv"):
             correlations = [(delay, compute_corr(topic_df.keys()[0], delay, data_be, topic_df)) for delay in
                             range(0, 17)]
             best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
-            df.loc[count] = [search_obj.group(), topic_df.keys()[0], best_delay, best_corr]
+            df.loc[count] = [search_obj.group(1), topic_df.keys()[0], best_delay, best_corr]
             count += 1
 
     # Write a summary of all the related topics in a CSV file
@@ -238,7 +238,6 @@ def get_best_topics(filename='../data/trends/explore/related_topics.csv', number
     dict = {}
     for i in range(min(number, len(list_topics))):
         dict[list_topics[i][0]] = list_topics[i][1]
-
     return dict
 
 
@@ -402,7 +401,8 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
     - scale: word_monthly/100
     - word: word_unscaled * scale -> contains data between 0-100 (with only one 100)
     """
-
+    if verbose:
+        print(f'{word} downloaded from google trends')
     return complete
 
 
@@ -462,7 +462,7 @@ def load_term(termname, term, dir="../data/trends/explore/", geo="BE-WAL", start
 def create_dataframe(hospi_france='hospitals.csv', hospi_belgium='be-covid-hospi.csv',
                      trends_france='france_departements.csv'):
     """
-    Creates the dataframe containing the trends for each symptom and the number of new hospitalizations
+    Creates the dataframe containing the number of daily new hospitalizations
     with respect to the date and the localisation (FR and BE)
     """
     departements = pd.read_csv(trends_france)
@@ -570,3 +570,42 @@ def google_trends_process(full_data, start_year, start_mon, stop_year, stop_mon,
     full_data_no_rolling = normalize_hosp_stand(full_data_no_rolling)
 
     return full_data, full_data_no_rolling
+
+
+def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=3):
+    """
+    get the latest available data from google trends and stores it as csv files
+    :param keywords: dict of topic_title:topic_mid
+    :param verbose: True if information must be printed over time
+    :param start_year: year of the start date
+    :param start_month: month of the start date
+    """
+    today = date.today()  # take the latest data
+    stop_year = today.year
+    stop_month = today.month
+    model_path = '../data/trends/model'
+    first_iteration = True
+    asked_min = date(start_year, start_month, 1)
+    asked_max = today
+    for geo, description in google_geocodes.items():
+        if verbose:
+            print(f'-- collecting data for {geo}:{description} --')
+        for name, code in keywords.items():
+            # get the data for the corresponding topic in the corresponding localisation
+            csv_file = f'{model_path}/{geo}-{name}.csv'
+            if os.path.exists(csv_file):  # check if an existing file already contain the dates
+                df = pd.read_csv(csv_file)
+                df.set_index('date', inplace=True)
+                stored_max = datetime.strptime(df.index.max().replace(',', ''), '%Y-%m-%d').date()
+                stored_min = datetime.strptime(df.index.min().replace(',', ''), '%Y-%m-%d').date()
+                if stored_max >= asked_max and stored_min <= asked_min:
+                    continue  # no data is downloaded if the range asked is already there
+            df = get_daily_data(code, start_year, start_month, stop_year, stop_month, geo, verbose=verbose)
+            if first_iteration:  # google trends might not have the data for today
+                # store the latest day where trends data exist
+                asked_max = datetime.strptime(str(df.index.max()).replace(',', ''), '%Y-%m-%d 00:00:00').date()
+                first_iteration = False
+            df.to_csv(csv_file)
+
+
+actualize_trends(extract_topics(), start_month=3)

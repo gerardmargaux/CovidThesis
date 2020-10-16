@@ -23,6 +23,14 @@ valid_data = {}
 test_data = {}
 
 
+def create_dataframe_url():
+    pass
+
+
+def get_trends_df(url, dict):
+    pass
+
+
 def create_dataset(dataset):
     """
     Converts an array of values into a dataset matrix
