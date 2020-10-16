@@ -9,6 +9,9 @@ from tensorflow.keras import regularizers
 import pickle
 from tensorflow.python.keras.models import load_model
 from src.data_collection import *
+import urllib
+import io
+import requests
 
 look_back = 1
 delay = 7
@@ -21,6 +24,53 @@ n_features = -1
 train_data = {}
 valid_data = {}
 test_data = {}
+
+list_topics = {
+    'Fièvre': '/m/0cjf0',
+    'Mal de gorge': '/m/0b76bty',
+    'Dyspnée': '/m/01cdt5',
+    'Agueusie': '/m/05sfr2',
+    'Anosmie': '/m/0m7pl',
+    'Coronavirus': '/m/01cpyy',
+    'Virus': '/m/0g9pc',
+    'Température corporelle humaine': '/g/1213j0cz',
+    'Épidémie': '/m/0hn9s',
+    'Symptôme': '/m/01b_06',
+    'Thermomètre': '/m/07mf1',
+    'Grippe espagnole': '/m/01c751',
+    'Paracétamol': '/m/0lbt3',
+    'Respiration': '/m/02gy9_',
+    'Toux': '/m/01b_21'
+}
+
+
+def create_df_trends_url(url_trends, url_hospi, geo):
+    """
+    Creates a dataframe containing the number of new hospitalizations and the trends of some symptoms with respect to
+    the date
+    :param url_trends:  url of the CSV file in which data concerning trends are stocked
+    :param url_hospi: url of the CSV file in which data concerning hospitalizations are stocked
+    :param geo: geo localisation of the trends requests
+    :return: a full dataframe that is ready to be process
+    """
+    df_final = create_df_hospi(url_hospi).set_index('DATE')
+    for term in list_topics.keys():
+        print(term)
+        path = f"{url_trends}{geo}-{term}.csv"
+        encoded_path = requests.get(path).content
+        df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8"))).rename(columns={"date": "DATE"}).set_index("DATE")
+        df_final = pd.concat([df_final, df_trends], axis=1)
+
+    return df_final
+
+
+def create_df_hospi(url):
+    """
+    Creates a dataframe containing the number of new hospitalizations with respect to the date
+    :param url: url of the CSV file in which data concerning hospitalizations are stocked
+    """
+    df_hospi = pd.read_csv(url).groupby(["DATE"]).agg({"NEW_IN": "sum"}).reset_index().rename(columns={"NEW_IN": "HOSP"})
+    return df_hospi
 
 
 def create_dataset(dataset):
@@ -55,8 +105,13 @@ def create_datapoints_for_each_loc(start_year, start_mon, stop_year, stop_mon, s
     global test_data
     full_datapoints = {}
 
-    full_data = create_dataframe()
-    full_data, full_data_no_rolling = google_trends_process(full_data, start_year=start_year, start_mon=start_mon,
+    geo = "BE-WAL"
+    url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/explore/"
+    url_hospi = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/src/be-covid-hospi.csv"
+    full_df = create_df_trends_url(url_trends, url_hospi, geo)
+    print(full_df)
+    #full_data = create_dataframe()
+    full_data, full_data_no_rolling = google_trends_process(full_df, start_year=start_year, start_mon=start_mon,
                                                             stop_year=stop_year, stop_mon=stop_mon, step=step,
                                                             data_collection=data_collection)
 
