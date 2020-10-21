@@ -8,7 +8,10 @@ from tensorflow.keras.layers import Dense, TimeDistributed, LSTM
 from tensorflow.keras import regularizers
 import pickle
 from tensorflow.python.keras.models import load_model
-from src.data_collection import *
+try:
+    from src.data_collection import *
+except ModuleNotFoundError:
+    from data_collection import *
 import urllib
 import io
 import requests
@@ -53,14 +56,16 @@ def create_df_trends_url(url_trends, url_hospi, geo):
     :param geo: geo localisation of the trends requests
     :return: a full dataframe that is ready to be process
     """
-    df_final = create_df_hospi(url_hospi).set_index('DATE')
+    #df_final = create_df_hospi(url_hospi).set_index('DATE')
+    df_final = create_dataframe_belgium(url_hospi)
     for term in list_topics.keys():
         print(term)
         path = f"{url_trends}{geo}-{term}.csv"
         encoded_path = requests.get(path).content
-        df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8"))).rename(columns={"date": "DATE"}).set_index("DATE")
+        df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8"))).rename(columns={"date": "DATE"})
+        df_trends['LOC'] = 'Belgique'
+        df_trends.set_index(['LOC', 'DATE'], inplace=True)
         df_final = pd.concat([df_final, df_trends], axis=1)
-
     return df_final
 
 
@@ -113,13 +118,13 @@ def create_datapoints_for_each_loc(start_year, start_mon, stop_year, stop_mon, s
     global test_data
     full_datapoints = {}
 
-    geo = "BE-WAL"
-    url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/explore/"
+    geo = "BE"
+    url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/model/"
     url_hospi = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/src/be-covid-hospi.csv"
     full_df = create_df_trends_url(url_trends, url_hospi, geo)
     print(full_df)
     #full_data = create_dataframe()
-    full_data, full_data_no_rolling = google_trends_process(full_df, start_year=start_year, start_mon=start_mon,
+    full_data, full_data_no_rolling = google_trends_process(full_df, list_topics, start_year=start_year, start_mon=start_mon,
                                                             stop_year=stop_year, stop_mon=stop_mon, step=step,
                                                             data_collection=data_collection)
 
@@ -432,5 +437,14 @@ def run_automatically(start_year, start_mon, stop_year, stop_mon, step, data_col
     prediction_model(best_model)
 
 
-# For collecting data before creating the prediction model -> data_collection=True
-run_automatically(start_year=2020, start_mon=2, stop_year=2020, stop_mon=9, step=1, data_collection=True)
+if __name__ == "__main__":
+    # For collecting data before creating the prediction model -> data_collection=True
+    # run_automatically(start_year=2020, start_mon=2, stop_year=2020, stop_mon=9, step=1, data_collection=True)
+    geo = "BE"
+    url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/model/"
+    url_hospi = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/src/be-covid-hospi.csv"
+    full_df = create_df_trends_url(url_trends, url_hospi, geo)
+    full_data, full_data_no_rolling = google_trends_process(full_df, list_topics, start_year=2020, start_mon=2,
+                                                               stop_year=2020,
+                                                              stop_mon=9, step=1, data_collection=False)
+

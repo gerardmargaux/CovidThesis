@@ -460,13 +460,29 @@ def load_term(termname, term, dir="../data/trends/explore/", geo="BE-WAL", start
     return content
 
 
+def create_dataframe_belgium(hospi_belgium='be-covid-hospi.csv'):
+    data_be = pd.read_csv(hospi_belgium).groupby(["DATE"]).agg({"NEW_IN": "sum"}).reset_index().rename(
+        columns={"NEW_IN": "HOSP"})
+
+    data_be["LOC"] = "Belgique"
+    base_date = datetime.strptime("2020-02-01", "%Y-%m-%d").date()
+    end = datetime.strptime(data_be['DATE'].min(), "%Y-%m-%d").date()
+    cur = base_date
+    toadd = []
+    while cur != end:
+        toadd.append([cur.strftime("%Y-%m-%d"), 'Belgique', 0])
+        cur += timedelta(days=1)
+    data_be = data_be.append(pd.DataFrame(toadd, columns=["DATE", "LOC", "HOSP"])).set_index(["LOC", "DATE"])
+    return data_be
+
+
 def create_dataframe(hospi_france='hospitals.csv', hospi_belgium='be-covid-hospi.csv',
-                     trends_france='france_departements.csv'):
+                     department_france='france_departements.csv'):
     """
     Creates the dataframe containing the number of daily new hospitalizations
     with respect to the date and the localisation (FR and BE)
     """
-    departements = pd.read_csv(trends_france)
+    departements = pd.read_csv(department_france)
     hospitalisations = pd.read_csv(hospi_france, sep=";")
     data_fr = hospitalisations.join(departements.set_index('departmentCode'), on="dep").groupby(["regionName", "jour"],
                                                                                                 as_index=False).agg(
@@ -553,7 +569,7 @@ def google_trends_process(full_data, terms, start_year, start_mon, stop_year, st
 
     for loc in all_google_data:
         all_google_data[loc]["LOC"] = google_geocodes[loc]
-        all_google_data[loc] = all_google_data[loc].reset_index().rename(columns={"index": "DATE"})
+        all_google_data[loc] = all_google_data[loc].reset_index().rename(columns={"index": "DATE", 'date': 'DATE'})
 
     all_google_data = pd.concat(all_google_data.values())
     all_google_data = all_google_data.groupby(["LOC", "DATE"]).mean()
@@ -605,7 +621,7 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
                 if stored_max >= asked_max and stored_min <= asked_min:
                     continue  # no data is downloaded if the range asked is already there
             df = get_daily_data(code, start_year, start_month, stop_year, stop_month, geo, verbose=verbose)
-            sleep(1 + random.random())  # prevent 429s
+            # sleep(1 + random.random())  # prevent 429s
             if first_iteration:  # google trends might not have the data for today
                 # store the latest day where trends data exist
                 asked_max = datetime.strptime(str(df.index.max()).replace(',', ''), '%Y-%m-%d 00:00:00').date()
@@ -615,4 +631,5 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
 
 
 if __name__ == "__main__":
-    actualize_trends(extract_topics(), start_month=3)
+    # actualize_trends(extract_topics(), start_month=3)
+    pass
