@@ -10,32 +10,13 @@ import os.path
 from os import listdir
 from datetime import date, datetime, timedelta
 import random
+import io
+import requests
 import re
 
+#from src.prediction_model import *
 
 google_geocodes = {
-    'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-    'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-    'FR-C': "Auvergne-Rhône-Alpes",
-    'FR-P': "Normandie",
-    'FR-D': "Bourgogne-Franche-Comté",
-    'FR-E': 'Bretagne',
-    'FR-F': 'Centre-Val de Loire',
-    'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-    'FR-H': 'Corse',
-    'FR-I': "Bourgogne-Franche-Comté",
-    'FR-Q': "Normandie",
-    'FR-J': 'Ile-de-France',
-    'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-    'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-    'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-    'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-    'FR-O': 'Nord-Pas-de-Calais-Picardie',
-    'FR-R': 'Pays de la Loire',
-    'FR-S': 'Nord-Pas-de-Calais-Picardie',
-    'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
-    'FR-U': "Provence-Alpes-Côte d'Azur",
-    'FR-V': "Auvergne-Rhône-Alpes",
     'BE': "Belgique"
 }
 
@@ -446,15 +427,16 @@ def load_term(termname, term, dir="../data/trends/explore/", geo="BE-WAL", start
         termname_path = termname
 
     path = f"{dir}{geo}-{termname_path}.csv"
+    encoded_path = requests.get(path).content
 
     if not os.path.exists(path):
         print(f"DL {geo} {termname}")
         content = _dl_term(term, start_year=start_year, start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon)
         if content.empty:
             return content
-        content.to_csv(path)
+        content.to_csv(io.StringIO(encoded_path.decode("utf-8")))
 
-    content = pd.read_csv(path)
+    content = pd.read_csv(io.StringIO(encoded_path.decode("utf-8")))
     content = content.rename(columns={term: termname})
     content = content.set_index("date")
     return content
@@ -563,7 +545,8 @@ def google_trends_process(full_data, terms, start_year, start_mon, stop_year, st
     if terms is None:
         terms = get_best_topics()
 
-    all_google_data = {idx: pd.concat([load_term(key, val, dir="../data/trends/model/", geo=idx, start_year=start_year,
+    url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/model/"
+    all_google_data = {idx: pd.concat([load_term(key, val, dir=url_trends, geo=idx, start_year=start_year,
                                                  start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon) for
                                        key, val in terms.items()], axis=1) for idx in google_geocodes}
 
