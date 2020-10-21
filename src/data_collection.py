@@ -9,6 +9,7 @@ from pytrends.dailydata import get_daily_data
 import os.path
 from os import listdir
 from datetime import date, datetime, timedelta
+import random
 import re
 
 
@@ -575,18 +576,18 @@ def google_trends_process(full_data, terms, start_year, start_mon, stop_year, st
     return full_data, full_data_no_rolling
 
 
-def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=3):
+def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=3, path='../data/trends/model'):
     """
     get the latest available data from google trends and stores it as csv files
     :param keywords: dict of topic_title:topic_mid
     :param verbose: True if information must be printed over time
     :param start_year: year of the start date
     :param start_month: month of the start date
+    :param path: path where the trends are stored
     """
     today = date.today()  # take the latest data
     stop_year = today.year
     stop_month = today.month
-    model_path = '../data/trends/model'
     first_iteration = True
     asked_min = date(start_year, start_month, 1)
     asked_max = today
@@ -595,7 +596,7 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
             print(f'-- collecting data for {geo}:{description} --')
         for name, code in keywords.items():
             # get the data for the corresponding topic in the corresponding localisation
-            csv_file = f'{model_path}/{geo}-{name}.csv'
+            csv_file = f'{path}/{geo}-{name}.csv'
             if os.path.exists(csv_file):  # check if an existing file already contain the dates
                 df = pd.read_csv(csv_file)
                 df.set_index('date', inplace=True)
@@ -604,11 +605,14 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
                 if stored_max >= asked_max and stored_min <= asked_min:
                     continue  # no data is downloaded if the range asked is already there
             df = get_daily_data(code, start_year, start_month, stop_year, stop_month, geo, verbose=verbose)
+            sleep(1 + random.random())  # prevent 429s
             if first_iteration:  # google trends might not have the data for today
                 # store the latest day where trends data exist
                 asked_max = datetime.strptime(str(df.index.max()).replace(',', ''), '%Y-%m-%d 00:00:00').date()
                 first_iteration = False
+            df.drop(columns=['isPartial'], inplace=True)
             df.to_csv(csv_file)
 
 
-actualize_trends(extract_topics(), start_month=3)
+if __name__ == "__main__":
+    actualize_trends(extract_topics(), start_month=3)
