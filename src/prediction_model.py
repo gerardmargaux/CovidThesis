@@ -46,7 +46,29 @@ list_topics = {
 }
 
 
-def create_df_trends_url( url_hospi, geo):
+def create_full_df(url_trends, url_hospi, geo):
+    df_final = create_dataframe_belgium(url_hospi)
+    for term in list_topics.keys():
+        path = f"{url_trends}{geo}-{term}.csv"
+        encoded_path = requests.get(path).content
+        df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8"))).rename(columns={"date": "DATE"})
+        df_trends['LOC'] = 'Belgique'
+        df_trends.set_index(['LOC', 'DATE'], inplace=True)
+        df_final = pd.concat([df_final, df_trends], axis=1)
+
+    return df_final
+
+
+def create_df_hospi(url):
+    """
+    Creates a dataframe containing the number of new hospitalizations with respect to the date
+    :param url: url of the CSV file in which data concerning hospitalizations are stocked
+    """
+    df_hospi = pd.read_csv(url).groupby(["DATE"]).agg({"NEW_IN": "sum"}).reset_index().rename(columns={"NEW_IN": "HOSP"})
+    return df_hospi
+
+
+def create_df_trends_url(url_hospi, geo):
     """
     Creates a dataframe containing the number of new hospitalizations and the trends of some symptoms with respect to
     the date
@@ -67,13 +89,12 @@ def create_df_trends_url( url_hospi, geo):
     return df_final
 
 
-def create_dataset(dataset):
+def create_dataset(dataset, look_back=3):
     """
     Converts an array of values into a dataset matrix
     :param dataset: array of values
     :return: a dataset matrix
     """
-    look_back = 3
     dataX, dataY = [], []
     for i in range(len(dataset) - look_back - delay):
         a = dataset[i:(i + look_back), :-1]
@@ -419,4 +440,7 @@ def run_automatically(start_year, start_mon, stop_year, stop_mon, step, data_col
 if __name__ == "__main__":
     # For collecting data before creating the prediction model -> data_collection=True
     # run_automatically(start_year=2020, start_mon=2, stop_year=2020, stop_mon=9, step=1, data_collection=True)
-    pass
+    geo = "BE"
+    url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/model/"
+    url_hospi = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/src/be-covid-hospi.csv"
+    full_df = create_full_df(url_trends, url_hospi, geo)
