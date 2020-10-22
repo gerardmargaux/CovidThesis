@@ -1,6 +1,7 @@
+import scaler
 from tensorflow import keras
 import numpy as np
-#import talos
+import talos
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -72,6 +73,7 @@ def create_dataset(dataset):
     :param dataset: array of values
     :return: a dataset matrix
     """
+    look_back = 3
     dataX, dataY = [], []
     for i in range(len(dataset) - look_back - delay):
         a = dataset[i:(i + look_back), :-1]
@@ -99,11 +101,9 @@ def create_datapoints_for_each_loc(start_year, start_mon, stop_year, stop_mon, s
     full_datapoints = {}
 
     geo = "BE"
-    #url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/model/"
-    url_hospi = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/src/be-covid-hospi.csv"
+    url_hospi = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/hospi/be-covid-hospi.csv"
     full_df = create_df_trends_url(url_hospi, geo)
     print(full_df)
-    #full_data = create_dataframe()
     full_data, full_data_no_rolling = google_trends_process(full_df, list_topics, start_year=start_year, start_mon=start_mon,
                                                             stop_year=stop_year, stop_mon=stop_mon, step=step,
                                                             data_collection=data_collection)
@@ -221,7 +221,6 @@ def create_model(_, _2, _3, _4, p):
     :return: history : a history object containing a dictionary of all loss values and other metric values.
     :return: model : the sequential trained model
     """
-
     session_conf = tf.compat.v1.ConfigProto(intra_op_parallelism_threads=8, inter_op_parallelism_threads=8)
     tf.compat.v1.set_random_seed(1)
     sess = tf.compat.v1.Session(graph=tf.compat.v1.get_default_graph(), config=session_conf)
@@ -245,13 +244,13 @@ def create_model(_, _2, _3, _4, p):
                         validation_data=validation_generator(), validation_steps=len(valid_data))
 
     # saving of the history in a log file
-    with open('../data/trends/training.log', 'wb') as file_pi:
-        pickle.dump(history.history, file_pi)
+    #with open('../data/trends/training.log', 'wb') as file_pi:
+    #    pickle.dump(history.history, file_pi)
 
     # saving of the entire model
     # path to the file where the model will be saved
-    save_model = "../data/trends/saved_model"
-    tf.keras.models.save_model(model=model, filepath=save_model)
+    #save_model = "../data/trends/saved_model"
+    #tf.keras.models.save_model(model=model, filepath=save_model)
 
     return history, model
 
