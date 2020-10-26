@@ -1,3 +1,6 @@
 .idea
 data/trends/explore/BE-WAL-*
+
+src/trends1/*
+src/.ipynb_checkpoints
 src/__pycache__/
