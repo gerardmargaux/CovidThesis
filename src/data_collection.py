@@ -1,5 +1,7 @@
+import subprocess
 from datetime import date, timedelta
 from functools import partial
+from subprocess import call
 from time import sleep
 from calendar import monthrange
 from pytrends.exceptions import ResponseError
@@ -613,6 +615,41 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
             df.to_csv(csv_file)
 
 
+def actualize_hospi(url_hospi_belgium, url_hospi_france):
+    # Get hospi for Belgium
+    encoded_path_be = requests.get(url_hospi_belgium).content
+    df_hospi_be = pd.read_csv(io.StringIO(encoded_path_be.decode("utf-8"))).drop(axis=1, columns='Unnamed: 0')
+    df_hospi_be.to_csv('../data/hospi/be-covid-hospi.csv', index=True)
+
+    # Get hospi for France
+    encoded_path_fr = requests.get(url_hospi_france).content
+    df_hospi_fr = pd.read_csv(io.StringIO(encoded_path_fr.decode("utf-8")))
+    df_hospi_fr = df_hospi_fr.rename(columns=lambda s: s.replace('"', ''))
+    for i, col in enumerate(df_hospi_fr.columns):
+        df_hospi_fr.iloc[:, i] = df_hospi_fr.iloc[:, i].str.replace('"', '')
+    df_hospi_fr.to_csv('../data/hospi/fr-covid-hospi-total.csv', index=False)
+    return
+
+
+def actualize_github():
+    subprocess.run("git pull", shell=True)
+    file_list = [
+        '../data/hospi/fr-covid-hospi-total.csv',
+        '../data/hospi/be-covid-hospi.csv',
+        '../data/trends/model'
+    ]
+    for file in file_list:
+        subprocess.run(f'git add {file}', shell=True)
+    commit_message = "'Automatic actualization of trends and hospitalizatons'"
+    subprocess.run(f'git commit -m {commit_message}', shell=True)
+    subprocess.run(f'git push', shell=True)
+
+
 if __name__ == "__main__":
-    # actualize_trends(extract_topics(), start_month=3)
+    """url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
+    url_hospi_france = 'https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7'
+    actualize_hospi(url_hospi_belgium, url_hospi_france)
+    actualize_trends(extract_topics(), start_month=3)
+    actualize_github()"""
     pass
+
