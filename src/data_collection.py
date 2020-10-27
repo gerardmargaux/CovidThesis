@@ -349,35 +349,35 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
     build_payload = partial(pytrends.build_payload,
                             kw_list=[word], cat=0, geo=geo, gprop='')
 
-    if (stop_date - start_date).days >= 365:
-        # Obtain monthly data for all months in years [start_year, stop_year]
-        monthly = _fetch_data(pytrends, build_payload,
-                              convert_dates_to_timeframe(start_date, stop_date))
+    #if (stop_date - start_date).days >= 365:
+    # Obtain monthly data for all months in years [start_year, stop_year]
+    monthly = _fetch_data(pytrends, build_payload,
+                          convert_dates_to_timeframe(start_date, stop_date))
 
-        # Get daily data, month by month
-        results = {}
-        # if a timeout or too many requests error occur we need to adjust wait time
-        current = start_date
-        while current < stop_date:
-            last_date_of_month = get_last_date_of_month(current.year, current.month)
-            timeframe = convert_dates_to_timeframe(current, last_date_of_month)
-            if verbose:
-                print(f'{word}:{timeframe}')
-            results[current] = _fetch_data(pytrends, build_payload, timeframe)
-            current = last_date_of_month + timedelta(days=1)
-            sleep(wait_time)  # don't go too fast or Google will send 429s
+    # Get daily data, month by month
+    results = {}
+    # if a timeout or too many requests error occur we need to adjust wait time
+    current = start_date
+    while current < stop_date:
+        last_date_of_month = get_last_date_of_month(current.year, current.month)
+        timeframe = convert_dates_to_timeframe(current, last_date_of_month)
+        if verbose:
+            print(f'{word}:{timeframe}')
+        results[current] = _fetch_data(pytrends, build_payload, timeframe)
+        current = last_date_of_month + timedelta(days=1)
+        sleep(wait_time)  # don't go too fast or Google will send 429s
 
-        daily = pd.concat(results.values()).drop(columns=['isPartial'])
-        complete = daily.join(monthly, lsuffix='_unscaled', rsuffix='_monthly')
+    daily = pd.concat(results.values()).drop(columns=['isPartial'])
+    complete = daily.join(monthly, lsuffix='_unscaled', rsuffix='_monthly')
 
-        # Scale daily data by monthly weights so the data is comparable
-        complete[f'{word}_monthly'].ffill(inplace=True)  # fill NaN values
-        complete['scale'] = complete[f'{word}_monthly'] / 100
-        complete[word] = complete[f'{word}_unscaled'] * complete.scale
+    # Scale daily data by monthly weights so the data is comparable
+    complete[f'{word}_monthly'].ffill(inplace=True)  # fill NaN values
+    complete['scale'] = complete[f'{word}_monthly'] / 100
+    complete[word] = complete[f'{word}_unscaled'] * complete.scale
 
-    else:
-        complete = _fetch_data(pytrends, build_payload,
-                               convert_dates_to_timeframe(start_date, stop_date))
+    #else:
+    #    complete = _fetch_data(pytrends, build_payload,
+    #                          convert_dates_to_timeframe(start_date, stop_date))
 
     """ dataframe contains
     - word_unscaled: data with a top 0-100 monthly
@@ -646,10 +646,10 @@ def actualize_github():
 
 
 if __name__ == "__main__":
-    """url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
+    url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
     url_hospi_france = 'https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7'
-    actualize_hospi(url_hospi_belgium, url_hospi_france)
+    #actualize_hospi(url_hospi_belgium, url_hospi_france)
     actualize_trends(extract_topics(), start_month=3)
-    actualize_github()"""
-    pass
+    #actualize_github()
+    #pass
 
