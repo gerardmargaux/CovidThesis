@@ -14,7 +14,7 @@ import io
 import requests
 import re
 
-#from src.prediction_model import *
+# from src.prediction_model import *
 
 google_geocodes = {
     'BE': "Belgique"
@@ -302,6 +302,85 @@ def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
     return {**dic_rising, **dic_top}
 
 
+def merge_trends_batches(left, right, overlap_hour, topic):
+    """
+    return the concatenation of left and right, correctly scaled based on their overlap (in hours)
+
+    :param left: accumulator dataframe
+    :param right: new dataframe to add to the accumulator
+    :param overlap_hour: number of hours that are overlapping
+    :param topic: topic considered
+    """
+    if left.empty:
+        return right
+    # retrieve the overlapping points:
+    overlap_start = right.index.min()
+    overlap_end = overlap_start + timedelta(hours=overlap_hour-1)
+    left_overlap = left[overlap_start:overlap_end]
+    right_overlap = right[overlap_start:overlap_end]
+    scaling = (left_overlap[topic] / right_overlap[topic]).mean()
+    if scaling < 1:  # right has not the good scale
+        right_to_add = right[right.index > overlap_end]
+        right_to_add = right_to_add * scaling
+        return left.append(right_to_add)
+    else:  # left has not the good scale
+        left_to_add = left[left.index < overlap_start]
+        left_to_add = left_to_add * scaling
+        return left_to_add.append(right)
+
+
+def get_historical_interest_normalized(topic, date_begin, date_end, geo, overlap_hour=1, verbose=True, sleep_fun=None):
+    """
+    return the historical data for a topic, hour by hour, on the given interval.
+
+    the normalization is performed based on overlap_hour common data points, in order ot have only one value of 100 on
+    the final dataframe
+
+    :param topic: topic to query
+    :param date_begin: first date to search
+    :param date_end: last date to search
+    :param geo: geocode of where we want to retrieve the data
+    :param overlap_hour: hours used for overlap between 2 requests
+    :param verbose: whether to print information while the code is running or not
+    :param sleep_fun: 0-argument function, telling how many seconds we must wait between each request
+    :return: normalized dataframe for the topic
+    """
+    start = datetime.strptime(date_begin, "%Y-%m-%d")
+    end = datetime.strptime(date_end, "%Y-%m-%d")
+    if sleep_fun is None:  # no sleep function specified
+        sleep_fun = lambda: 10 + 5 * random.random()  # by default sleep for 10 seconds + between 0 and 5 randomly
+    delta = timedelta(days=7, hours=23) - timedelta(hours=(overlap_hour - 1))  # delay between each batch
+    start_batch = start - delta
+    end_batch = start - delta + timedelta(days=7, hours=23)
+    finished = False
+    i = 0
+    interest_unscaled = pd.DataFrame()
+    interest_scaled = pd.DataFrame()
+    while not finished:
+        start_batch = start_batch + delta
+        end_batch = min(end_batch + delta, end)
+        timeframe = start_batch.strftime("%Y-%m-%dT%H") + ' ' + end_batch.strftime("%Y-%m-%dT%H")
+        pytrends = TrendReq(hl='fr-BE')
+        build_payload = partial(pytrends.build_payload, kw_list=[topic], cat=0, geo=geo, gprop='')
+        batch = _fetch_data(pytrends, build_payload, timeframe)
+        if verbose:  # print some information
+            if batch.empty or 0 in batch[topic].values:
+                print(f"dataframe contains zero or is empty :(")
+            else:
+                print("dataframe does not contain any zero")
+            print(f"iter {i} timeframe {timeframe}")
+        batch.drop(columns=['isPartial'], inplace=True)
+        interest_unscaled = interest_unscaled.append(batch)  # add the new data
+        # we have overlap_hour points that we can use to normalize the data
+        interest_scaled = merge_trends_batches(interest_scaled, batch, overlap_hour, topic)
+        if end_batch == end:  # last date was visited, end of loop
+            finished = True
+        else:
+            sleep(sleep_fun())  # prevent 429s
+        i += 1
+    return interest_unscaled.reset_index(drop=True), interest_scaled
+
+
 def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, stop_mon: int,
                    geo: str = 'BE', verbose: bool = True, wait_time: float = 5.0) -> pd.DataFrame:
     """Given a word, fetches daily search volume data from Google Trends and
@@ -584,13 +663,39 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
     :param start_month: month of the start date
     :param path: path where the trends are stored
     """
+    geocodes = {
+        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-C': "Auvergne-Rhône-Alpes",
+        'FR-P': "Normandie",
+        'FR-D': "Bourgogne-Franche-Comté",
+        'FR-E': 'Bretagne',
+        'FR-F': 'Centre-Val de Loire',
+        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-H': 'Corse',
+        'FR-I': "Bourgogne-Franche-Comté",
+        'FR-Q': "Normandie",
+        'FR-J': 'Ile-de-France',
+        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        'FR-R': 'Pays de la Loire',
+        'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-U': "Provence-Alpes-Côte d'Azur",
+        'FR-V': "Auvergne-Rhône-Alpes",
+        'BE': "Belgique"
+    }
+
     today = date.today()  # take the latest data
     stop_year = today.year
     stop_month = today.month
     first_iteration = True
     asked_min = date(start_year, start_month, 1)
     asked_max = today
-    for geo, description in google_geocodes.items():
+    for geo, description in geocodes.items():
         if verbose:
             print(f'-- collecting data for {geo}:{description} --')
         for name, code in keywords.items():
@@ -614,5 +719,6 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
 
 
 if __name__ == "__main__":
-    # actualize_trends(extract_topics(), start_month=3)
-    pass
+    #actualize_trends(extract_topics(), start_month=3)
+    unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
+                                                          sleep_fun=lambda: 60 + 10 * random.random())
