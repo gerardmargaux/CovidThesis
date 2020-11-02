@@ -1,5 +1,7 @@
+import subprocess
 from datetime import date, timedelta
 from functools import partial
+from subprocess import call
 from time import sleep
 from calendar import monthrange
 from pytrends.exceptions import ResponseError
@@ -426,6 +428,7 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
     build_payload = partial(pytrends.build_payload,
                             kw_list=[word], cat=0, geo=geo, gprop='')
 
+    # TODO : Faire en sorte de récolter les données en jours lorsque l'API nous les donne en semaine
     if (stop_date - start_date).days >= 365:
         # Obtain monthly data for all months in years [start_year, stop_year]
         monthly = _fetch_data(pytrends, build_payload,
@@ -454,7 +457,7 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
 
     else:
         complete = _fetch_data(pytrends, build_payload,
-                               convert_dates_to_timeframe(start_date, stop_date))
+                              convert_dates_to_timeframe(start_date, stop_date))
 
     """ dataframe contains
     - word_unscaled: data with a top 0-100 monthly
@@ -718,7 +721,38 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
             df.to_csv(csv_file)
 
 
+def actualize_hospi(url_hospi_belgium, url_hospi_france):
+    # Get hospi for Belgium
+    encoded_path_be = requests.get(url_hospi_belgium).content
+    df_hospi_be = pd.read_csv(io.StringIO(encoded_path_be.decode("utf-8"))).drop(axis=1, columns='Unnamed: 0')
+    df_hospi_be.to_csv('../data/hospi/be-covid-hospi.csv', index=True)
+
+    # Get hospi for France
+    encoded_path_fr = requests.get(url_hospi_france).content
+    df_hospi_fr = pd.read_csv(io.StringIO(encoded_path_fr.decode("utf-8")))
+    df_hospi_fr = df_hospi_fr.rename(columns=lambda s: s.replace('"', ''))
+    for i, col in enumerate(df_hospi_fr.columns):
+        df_hospi_fr.iloc[:, i] = df_hospi_fr.iloc[:, i].str.replace('"', '')
+    df_hospi_fr.to_csv('../data/hospi/fr-covid-hospi-total.csv', index=False)
+    return
+
+
+def actualize_github():
+    subprocess.run("git pull", shell=True)
+    file_list = [
+        '../data/hospi/fr-covid-hospi-total.csv',
+        '../data/hospi/be-covid-hospi.csv',
+        '../data/trends/model'
+    ]
+    for file in file_list:
+        subprocess.run(f'git add {file}', shell=True)
+    commit_message = "'Automatic actualization of trends and hospitalizatons'"
+    subprocess.run(f'git commit -m {commit_message}', shell=True)
+    subprocess.run(f'git push', shell=True)
+
+
 if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
                                                           sleep_fun=lambda: 60 + 10 * random.random())
+
