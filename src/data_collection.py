@@ -15,6 +15,7 @@ import random
 import io
 import requests
 import re
+from requests.exceptions import ReadTimeout
 
 # from src.prediction_model import *
 
@@ -329,6 +330,89 @@ def merge_trends_batches(left, right, overlap_hour, topic):
         left_to_add = left[left.index < overlap_start]
         left_to_add = left_to_add * scaling
         return left_to_add.append(right)
+
+
+def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end_tot=None, overlap_hour=15, verbose=True):
+    """
+    load and collect hourly trends data for a given topic over a certain region
+
+    :param topic_mid: mid code
+    :param topic_title: title of the topic
+    :param geo: google geocode
+    :param begin_tot: beginning date. If None, default to first february
+    :param end_tot: end date. If None, default to today
+    :param overlap_hour: number of overlapping point
+    :param verbose: whether to print information while the code is running or not
+
+    :return dataframe of collected data
+    """
+    dir = "../data/trends/collect/"
+    batch_column = 'batch_id'
+    hour_format = "%Y-%m-%dT%H"
+    file = f"{dir}{geo}-{topic_title}.csv"
+    min_delta = timedelta(days=3)
+    if end_tot is None:
+        end_tot = datetime.now()
+
+    if os.path.exists(file):  # load previous file
+        date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+        df_tot = pd.read_csv(file, parse_dates=['date'], date_parser=date_parser).set_index('date')
+        max_batch = df_tot[batch_column].max()
+        if len(df_tot.loc[df_tot[batch_column] == max_batch]) < 192:  # if the last batch was not done on a whole week
+            df_tot = df_tot.loc[df_tot[batch_column] < max_batch]  # drop the last batch
+        i = df_tot[batch_column].max() + 1  # id of the next batch
+        begin_tot = df_tot.index.max() - timedelta(hours=(overlap_hour-1))
+        if end_tot - begin_tot < min_delta:  # must have a length of min 3 days
+            begin_tot = end_tot - min_delta
+    else:
+        df_tot = pd.DataFrame()
+        if begin_tot is None:
+            begin_tot = datetime.strptime("2020-02-01T00", hour_format)
+        i = 0
+
+    begin_cur = begin_tot  # beginning of current batch
+    end_cur = begin_tot + timedelta(days=7, hours=23)  # end of current batch
+    delta = timedelta(days=7, hours=23) - timedelta(hours=(overlap_hour-1))  # diff between 2 batches
+    delay = 0
+    finished = False
+    if verbose:
+        print(f"topic {topic_title} geo {geo}")
+    while not finished:
+        try:
+            sleep(delay)
+            timeframe = begin_cur.strftime(hour_format) + " " + end_cur.strftime(hour_format)
+            if verbose:
+                print(f"downloading {timeframe} ... ", end="")
+            pytrends = TrendReq("fr-BE")
+            pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
+            df = pytrends.interest_over_time()
+            if df.empty:
+                df = pd.DataFrame(data={'date': pd.date_range(start=begin_cur, end=end_cur, freq='H'), topic_mid: 0}).set_index('date')
+                df[batch_column] = -i
+            else:
+                df.drop(columns=['isPartial'], inplace=True)
+                df[batch_column] = i
+            i += 1
+            df_tot = df_tot.append(df)
+            df_tot.to_csv(file)
+            if end_cur == end_tot:
+                finished = True
+            begin_cur += delta
+
+            if end_cur + delta > end_tot:  # end of date
+                end_cur = end_tot
+                if end_cur - begin_cur < min_delta:  # must have a length of min 3 days
+                    begin_cur = end_cur - min_delta
+            else:  # not end of date, increment
+                end_cur = end_cur + delta
+
+            if verbose:
+                print("loaded")
+        except (ResponseError, ReadTimeout):  # use a delay if an error has been received
+            if verbose:
+                print("error when downloading. Retrying...")
+            delay = 60
+    return df_tot
 
 
 def get_historical_interest_normalized(topic, date_begin, date_end, geo, overlap_hour=1, verbose=True, sleep_fun=None):
@@ -753,6 +837,7 @@ def actualize_github():
 
 if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
-    unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
-                                                          sleep_fun=lambda: 60 + 10 * random.random())
+    #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
+    #                                                      sleep_fun=lambda: 60 + 10 * random.random())
+    collect_historical_interest('/m/0cjf0', 'fièvre', geo='BE')
 
