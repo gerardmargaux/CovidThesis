@@ -16,6 +16,10 @@ import io
 import requests
 import re
 from requests.exceptions import ReadTimeout
+import sys
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pytrends'])
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'os'])
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pandas'])
 
 # from src.prediction_model import *
 
@@ -410,7 +414,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
                 print("loaded")
         except (ResponseError, ReadTimeout):  # use a delay if an error has been received
             if verbose:
-                print("error when downloading. Retrying...")
+                print("Error when downloading. Retrying after sleeping during 60 sec ...")
             delay = 60
     return df_tot
 
@@ -839,5 +843,50 @@ if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-    collect_historical_interest('/m/0cjf0', 'fièvre', geo='BE')
+    list_topics = {
+        'Fièvre': '/m/0cjf0',
+        'Mal de gorge': '/m/0b76bty',
+        'Dyspnée': '/m/01cdt5',
+        'Agueusie': '/m/05sfr2',
+        'Anosmie': '/m/0m7pl',
+        'Coronavirus': '/m/01cpyy',
+        'Virus': '/m/0g9pc',
+        'Température corporelle humaine': '/g/1213j0cz',
+        'Épidémie': '/m/0hn9s',
+        'Symptôme': '/m/01b_06',
+        'Thermomètre': '/m/07mf1',
+        'Grippe espagnole': '/m/01c751',
+        'Paracétamol': '/m/0lbt3',
+        'Respiration': '/m/02gy9_',
+        'Toux': '/m/01b_21'
+    }
+
+    geocodes = {
+        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-C': "Auvergne-Rhône-Alpes",
+        'FR-P': "Normandie",
+        'FR-D': "Bourgogne-Franche-Comté",
+        'FR-E': 'Bretagne',
+        'FR-F': 'Centre-Val de Loire',
+        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-H': 'Corse',
+        'FR-I': "Bourgogne-Franche-Comté",
+        'FR-Q': "Normandie",
+        'FR-J': 'Ile-de-France',
+        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        'FR-R': 'Pays de la Loire',
+        'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-U': "Provence-Alpes-Côte d'Azur",
+        'FR-V': "Auvergne-Rhône-Alpes",
+        'BE': "Belgique"
+    }
+
+    for title, mid in list_topics.items():
+        collect_historical_interest(mid, title, geo='FR-A')
 
