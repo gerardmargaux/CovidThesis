@@ -17,9 +17,6 @@ import requests
 import re
 from requests.exceptions import ReadTimeout
 import sys
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pytrends'])
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'os'])
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pandas'])
 
 # from src.prediction_model import *
 
