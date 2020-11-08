@@ -11,7 +11,8 @@ from stem import Signal
 from stem.control import Controller
 from pandas.io.json._normalize import nested_to_record
 from requests.packages.urllib3.util.retry import Retry
-
+from .filter import filter_family, filter_os_family, filter_phone, filter_version_range
+from .utils import build_stream_function
 from pytrends import exceptions
 import json
 from datetime import datetime, timedelta
@@ -21,7 +22,100 @@ import requests
 
 from pytrends import exceptions
 
-#ua = UserAgent()
+class UserAgent():
+    from my_fake_useragent.parsed_data import parsed_data
+
+    def __init__(self,
+                 family=None,
+                 os_family=None,
+                 phone=None,
+                 version_range=None,
+                 ):
+        """
+        :param mode: default mode
+        :param family: 不设置则不管 指定浏览器类型
+        :param os_family: 不设置则不管 指定操作系统
+        :param phone: 指定是否是手机端 True 是 False 不是 不设置默认None则不管
+        :param version_range: 不设置则不管 指定浏览器版本范围
+        手机检测 根据设备family参数之外 操作系统检测到 android 或 ios 也认为是移动端
+        """
+
+        if isinstance(family, str):
+            family = family.lower()
+            self.family = [family]
+        elif isinstance(family, (list, tuple)):
+            self.family = [f.lower() for f in family]
+        elif family is None:
+            self.family = None
+        else:
+            raise ValueError('family')
+
+        if isinstance(os_family, str):
+            os_family = os_family.lower()
+            self.os_family = [os_family]
+        elif isinstance(os_family, (list, tuple)):
+            self.os_family = [f.lower() for f in os_family]
+        elif os_family is None:
+            self.os_family = None
+        else:
+            raise ValueError('os_family')
+
+        self.phone = phone
+        if self.phone not in [None, True, False]:
+            raise ValueError('phone')
+
+        self.version_range = version_range
+
+        self.filter_func = build_stream_function(filter_family,
+                                                 filter_os_family, filter_phone,
+                                                 filter_version_range)
+
+    def random(self):
+        user_agent_list = self.get_useragent_list()
+
+        if user_agent_list:
+            return random.choice(user_agent_list)
+        else:
+            raise Exception('empty result')
+
+    def get_useragent_list(self):
+        origin_data = []
+        for key in self.parsed_data:
+            origin_data += self.parsed_data[key]
+
+        d = {
+            'data': origin_data,
+            'family': self.family,
+            'version_range': self.version_range,
+            'os_family': self.os_family,
+            'phone': self.phone
+        }
+
+        d = self.filter_func(d)
+
+        ua_string_list = [i['string'] for i in d['data']]
+        return ua_string_list
+
+    def test_possible_family(self):
+        t1 = set()
+        for k, v in self.parsed_data.items():
+            for i in v:
+                t1.add(i['user_agent']['family'])
+        return t1
+
+    def test_possible_os_family(self):
+        t1 = set()
+        for k, v in self.parsed_data.items():
+            for i in v:
+                t1.add(i['os']['family'])
+        return t1
+
+    def test_possible_device_family(self):
+        t1 = set()
+        for k, v in self.parsed_data.items():
+            for i in v:
+                t1.add(i['device']['family'])
+        return t1
 
 
 class TrendReq(object):
@@ -546,21 +640,7 @@ class TrendReq(object):
         return df.loc[initial_start_date:end_date]
 
 
-
-"""def get_current_ip():
-    session = requests.session()
-
-    # TO Request URL with SOCKS over TOR
-    session.proxies = {}
-    session.proxies['http']='socks5h://localhost:9050'
-    session.proxies['https']='socks5h://localhost:9050'
-
-    try:
-        r = session.get('http://httpbin.org/ip')
-    except Exception as e:
-        print(e)
-    else:
-        return r.text"""
+ua = UserAgent()
 
 
 def renew_tor_ip():
@@ -616,11 +696,11 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
         print(f"topic {topic_title} geo {geo}")
     while not finished:
         try:
-            #sleep(delay + random.random())
+            sleep(5)
             timeframe = begin_cur.strftime(hour_format) + " " + end_cur.strftime(hour_format)
             if verbose:
                 print(f"downloading {timeframe} ... ", end="")
-            #agent = ua.random()
+            agent = ua.random()
             #print("Custom agent : ", agent)
             # Change of IP address
             old_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
@@ -628,7 +708,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             renew_tor_ip()
             current_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
             print("Current IP address : ", current_ip.text.strip())
-            pytrends = TrendReq(hl="fr-BE", custom_useragent=None)
+            pytrends = TrendReq(hl="fr-BE", custom_useragent=agent)
             pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
             df = pytrends.interest_over_time()
             if df.empty:
