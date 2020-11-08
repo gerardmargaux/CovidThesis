@@ -595,16 +595,16 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
         print(f"topic {topic_title} geo {geo}")
     while not finished:
         try:
-            sleep(5)
             timeframe = begin_cur.strftime(hour_format) + " " + end_cur.strftime(hour_format)
             if verbose:
                 print(f"downloading {timeframe} ... ", end="")
             #agent = ua.random()
             #print("Custom agent : ", agent)
             # Change of IP address
-            old_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
-            print("Old IP address : ", old_ip.text.strip())
+            #old_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
+            #print("Old IP address : ", old_ip.text.strip())
             renew_tor_ip()
+            sleep(10)
             current_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
             print("Current IP address : ", current_ip.text.strip())
             pytrends = TrendReq(hl="fr-BE", custom_useragent=None)
