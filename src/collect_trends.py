@@ -1,11 +1,8 @@
 from time import sleep
 from pytrends.exceptions import ResponseError
-#from pytrends.request import TrendReq
 import pandas as pd
 import os.path
 from datetime import date, datetime, timedelta
-
-from toripchanger import TorIpChanger
 
 from src.request_trends import TrendReq
 from my_fake_useragent import UserAgent
@@ -25,7 +22,7 @@ from stem import Signal
 from stem.control import Controller
 
 
-def get_current_ip():
+"""def get_current_ip():
     session = requests.session()
 
     # TO Request URL with SOCKS over TOR
@@ -38,12 +35,12 @@ def get_current_ip():
     except Exception as e:
         print(e)
     else:
-        return r.text
+        return r.text"""
 
-# 16:9BDF66CFF5304F8C609D1D8B4443A791A2AF1C8BC2D1287C506614F727
+
 def renew_tor_ip():
-    with Controller.from_port(port = 9051) as controller:
-        controller.authenticate(password="Coucou2000")
+    with Controller.from_port(port=9051) as controller:
+        controller.authenticate(password="coucou2000")
         controller.signal(Signal.NEWNYM)
 
 
@@ -101,11 +98,12 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             agent = ua.random()
             print("Custom agent : ", agent)
             # Change of IP address
+            old_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
+            print("Old IP address : ", old_ip.text.strip())
             renew_tor_ip()
-            current_ip = get_current_ip()
-            print("Current IP address : ", current_ip)
-            pytrends = TrendReq(username="gargauxgege@gmail.com", password="6fUzLkV5MsGB", hl="fr-BE",
-                                custom_useragent=agent)
+            current_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
+            print("Current IP address : ", current_ip.text.strip())
+            pytrends = TrendReq(hl="fr-BE", custom_useragent=agent)
             pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
             df = pytrends.interest_over_time()
             if df.empty:
@@ -131,7 +129,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             if verbose:
                 print("loaded")
         except (ResponseError, ReadTimeout):  # use a delay if an error has been received
-            delay = random.randint(5, 150)
+            delay = random.randint(5, 60)
             if verbose:
                 print(f"Error when downloading. Retrying after sleeping during {delay} sec ...")
             sleep(delay)
