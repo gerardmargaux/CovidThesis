@@ -3,7 +3,6 @@ from time import sleep
 from pytrends.exceptions import ResponseError
 import os.path
 
-from src.request_trends import TrendReq
 from my_fake_useragent import UserAgent
 import random
 from requests.exceptions import ReadTimeout
