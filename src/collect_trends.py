@@ -1,25 +1,181 @@
+from __future__ import absolute_import, print_function, unicode_literals
 from time import sleep
 from pytrends.exceptions import ResponseError
-import pandas as pd
 import os.path
-from datetime import date, datetime, timedelta
 
 from src.request_trends import TrendReq
 from my_fake_useragent import UserAgent
 import random
-import socket
-import requests
-from bs4 import BeautifulSoup
+from requests.exceptions import ReadTimeout
+
 from stem import Signal
 from stem.control import Controller
-from requests.exceptions import ReadTimeout
+
+import json
+from datetime import datetime, timedelta
+
+import pandas as pd
+import requests
+
+from pytrends import exceptions
 
 ua = UserAgent()
 
-import requests
-import time
-from stem import Signal
-from stem.control import Controller
+
+class TrendReq(object):
+    """
+    Google Trends API
+    """
+    GET_METHOD = 'get'
+    POST_METHOD = 'post'
+    GENERAL_URL = 'https://trends.google.com/trends/api/explore'
+    INTEREST_OVER_TIME_URL = 'https://trends.google.com/trends/api/widgetdata/multiline'
+    INTEREST_BY_REGION_URL = 'https://trends.google.com/trends/api/widgetdata/comparedgeo'
+    RELATED_QUERIES_URL = 'https://trends.google.com/trends/api/widgetdata/relatedsearches'
+    TRENDING_SEARCHES_URL = 'https://trends.google.com/trends/hottrends/visualize/internal/data'
+    TOP_CHARTS_URL = 'https://trends.google.com/trends/api/topcharts'
+    SUGGESTIONS_URL = 'https://trends.google.com/trends/api/autocomplete/'
+    CATEGORIES_URL = 'https://trends.google.com/trends/api/explore/pickers/category'
+    TODAY_SEARCHES_URL = 'https://trends.google.com/trends/api/dailytrends'
+
+    def __init__(self, hl='en-US', tz=360, geo='', timeout=(2, 5), proxies='',
+                 retries=0, backoff_factor=0, requests_args=None, custom_useragent=None):
+        """
+        Initialize default values for params
+        """
+        # google rate limit
+        self.google_rl = 'You have reached your quota limit. Please try again later.'
+        self.results = None
+        # set user defined options used globally
+        self.tz = tz
+        self.hl = hl
+        self.geo = geo
+        self.kw_list = list()
+        self.timeout = timeout
+        self.proxies = proxies  # add a proxy option
+        self.retries = retries
+        self.backoff_factor = backoff_factor
+        self.proxy_index = 0
+        self.url_login = "https://accounts.google.com/ServiceLogin"
+        self.url_auth = "https://accounts.google.com/ServiceLoginAuth"
+        self.requests_args = requests_args or {}
+        self.cookies = self.GetGoogleCookie()
+        # intialize widget payloads
+        self.token_payload = dict()
+        self.interest_over_time_widget = dict()
+        self.interest_by_region_widget = dict()
+        self.related_topics_widget_list = list()
+        self.related_queries_widget_list = list()
+        if custom_useragent is None:
+            self.custom_useragent = {'User-Agent': 'PyTrends'}
+        else:
+            self.custom_useragent = {'User-Agent': custom_useragent}
+
+    def GetGoogleCookie(self):
+        """
+        Gets google cookie (used for each and every proxy; once on init otherwise)
+        Removes proxy from the list on proxy error
+        """
+        while True:
+            if len(self.proxies) > 0:
+                proxy = {'https': self.proxies[self.proxy_index]}
+            else:
+                proxy = ''
+            try:
+                return dict(filter(lambda i: i[0] == 'NID', requests.get(
+                    'https://trends.google.com/?geo={geo}'.format(
+                        geo=self.hl[-2:]),
+                    timeout=self.timeout,
+                    proxies=proxy,
+                    **self.requests_args
+                ).cookies.items()))
+            except requests.exceptions.ProxyError:
+                print('Proxy error. Changing IP')
+                if len(self.proxies) > 1:
+                    self.proxies.remove(self.proxies[self.proxy_index])
+                else:
+                    print('No more proxies available. Bye!')
+                    raise
+                continue
+
+    def GetNewProxy(self):
+        """
+        Increment proxy INDEX; zero on overflow
+        """
+        if self.proxy_index < (len(self.proxies) - 1):
+            self.proxy_index += 1
+        else:
+            self.proxy_index = 0
+
+    def _get_data(self, url, method=GET_METHOD, trim_chars=0, **kwargs):
+        """Send a request to Google and return the JSON response as a Python object
+        :param url: the url to which the request will be sent
+        :param method: the HTTP method ('get' or 'post')
+        :param trim_chars: how many characters should be trimmed off the beginning of the content of the response
+            before this is passed to the JSON parser
+        :param kwargs: any extra key arguments passed to the request builder (usually query parameters or data)
+        :return:
+        """
+        s = requests.session()
+        # Retries mechanism. Activated when one of statements >0 (best used for proxy)
+        if self.retries > 0 or self.backoff_factor > 0:
+            retry = Retry(total=self.retries, read=self.retries,
+                          connect=self.retries,
+                          backoff_factor=self.backoff_factor)
+
+        s.headers.update({'accept-language': self.hl})
+        if len(self.proxies) > 0:
+            self.cookies = self.GetGoogleCookie()
+            s.proxies.update({'https': self.proxies[self.proxy_index]})
+        if method == TrendReq.POST_METHOD:
+            response = s.post(url, timeout=self.timeout,
+                              cookies=self.cookies, **kwargs, **self.requests_args)  # DO NOT USE retries or backoff_factor here
+        else:
+            response = s.get(url, timeout=self.timeout, cookies=self.cookies,
+                             **kwargs, **self.requests_args)   # DO NOT USE retries or backoff_factor here
+        # check if the response contains json and throw an exception otherwise
+        # Google mostly sends 'application/json' in the Content-Type header,
+        # but occasionally it sends 'application/javascript
+        # and sometimes even 'text/javascript
+        if response.status_code == 200 and 'application/json' in \
+                response.headers['Content-Type'] or \
+                'application/javascript' in response.headers['Content-Type'] or \
+                'text/javascript' in response.headers['Content-Type']:
+            # trim initial characters
+            # some responses start with garbage characters, like ")]}',"
+            # these have to be cleaned before being passed to the json parser
+            content = response.text[trim_chars:]
+            # parse json
+            self.GetNewProxy()
+            return json.loads(content)
+        else:
+            # error
+            raise exceptions.ResponseError(
+                'The request failed: Google returned a '
+                'response with code {0}.'.format(response.status_code),
+                response=response)
+
+    def build_payload(self, kw_list, cat=0, timeframe='today 5-y', geo='',
+                      gprop=''):
+        """Create the payload for related queries, interest over time and interest by region"""
+        self.kw_list = kw_list
+        self.geo = geo or self.geo
+        self.token_payload = {
+            'hl': self.hl,
+            'tz': self.tz,
+            'req': {'comparisonItem': [], 'category': cat, 'property': gprop}
+        }
+
+        # build out json for each keyword
+        for kw in self.kw_list:
+            keyword_payload = {'keyword': kw, 'time': timeframe,
+                               'geo': self.geo}
+            self.token_payload['req']['comparisonItem'].append(keyword_payload)
+        # requests will mangle this if it is not a string
+        self.token_payload['req'] = json.dumps(self.token_payload['req'])
+        # get tokens
+        self._tokens()
+        return
 
 
 """def get_current_ip():
@@ -177,4 +333,4 @@ if __name__ == "__main__":
     }
 
     for title, mid in list_topics.items():
-        collect_historical_interest(mid, title, geo='FR-A')
+        collect_historical_interest(mid, title, geo='FR-V')
