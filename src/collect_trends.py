@@ -601,8 +601,6 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             #agent = ua.random()
             #print("Custom agent : ", agent)
             # Change of IP address
-            #old_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
-            #print("Old IP address : ", old_ip.text.strip())
             renew_tor_ip()
             sleep(10)
             current_ip = requests.get('http://icanhazip.com/', proxies={'http': '127.0.0.1:8118'})
@@ -632,10 +630,21 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
 
             if verbose:
                 print("loaded")
-        except (ResponseError, ReadTimeout):  # use a delay if an error has been received
+        except ResponseError as err:  # use a delay if an error has been received
+            if str(err.response) == '<Response [500]>':
+                write_file = '../data/trends/collect/timeframe_not_available.csv'
+                f = open(write_file, "w+")
+                f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                print(f"Error 500. Timeframe not available")
+            else:
+                delay = random.randint(5, 60)
+                if verbose:
+                    print(f"Error when downloading (ResponseError). Retrying after sleeping during {delay} sec ...")
+                sleep(delay)
+        except ReadTimeout:
             delay = random.randint(5, 60)
             if verbose:
-                print(f"Error when downloading. Retrying after sleeping during {delay} sec ...")
+                print(f"Error when downloading (ReadTimeout). Retrying after sleeping during {delay} sec ...")
             sleep(delay)
     return df_tot
 

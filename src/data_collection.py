@@ -11,6 +11,7 @@ from pytrends.dailydata import get_daily_data
 import os.path
 from os import listdir
 from datetime import date, datetime, timedelta
+from my_fake_useragent import UserAgent
 import random
 import io
 import requests
@@ -24,6 +25,7 @@ google_geocodes = {
     'BE': "Belgique"
 }
 
+ua = UserAgent()
 
 def extract_topics(filename="topics.txt", to_list=False):
     """
@@ -380,11 +382,13 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
         print(f"topic {topic_title} geo {geo}")
     while not finished:
         try:
-            sleep(delay)
+            sleep(delay + random.random())
             timeframe = begin_cur.strftime(hour_format) + " " + end_cur.strftime(hour_format)
             if verbose:
                 print(f"downloading {timeframe} ... ", end="")
-            pytrends = TrendReq("fr-BE")
+            agent = ua.random()
+            print("Custom agent : ", agent)
+            pytrends = TrendReq(hl="fr-BE")
             pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
             df = pytrends.interest_over_time()
             if df.empty:
@@ -409,10 +413,20 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
 
             if verbose:
                 print("loaded")
-        except (ResponseError, ReadTimeout):  # use a delay if an error has been received
-            if verbose:
-                print("Error when downloading. Retrying after sleeping during 60 sec ...")
+        except ResponseError as err:  # use a delay if an error has been received
+            if str(err.response) == '<Response [500]>':
+                write_file = '../data/trends/collect/timeframe_not_available.csv'
+                f = open(write_file, "w+")
+                f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                print(f"Error 500. Timeframe not available")
+            else:
+                delay = 60
+                if verbose:
+                    print(f"Error when downloading (ResponseError). Retrying after sleeping during {delay} sec ...")
+        except ReadTimeout:
             delay = 60
+            if verbose:
+                print(f"Error when downloading (ReadTimeout). Retrying after sleeping during {delay} sec ...")
     return df_tot
 
 

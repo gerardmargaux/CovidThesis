@@ -35,7 +35,7 @@ class TrendReq(object):
     CATEGORIES_URL = 'https://trends.google.com/trends/api/explore/pickers/category'
     TODAY_SEARCHES_URL = 'https://trends.google.com/trends/api/dailytrends'
 
-    def __init__(self, username, password, hl='en-US', tz=360, geo='', timeout=(2, 5), proxies='',
+    def __init__(self, hl='en-US', tz=360, geo='', timeout=(2, 5), proxies='',
                  retries=0, backoff_factor=0, requests_args=None, custom_useragent=None):
         """
         Initialize default values for params
@@ -43,8 +43,6 @@ class TrendReq(object):
         # google rate limit
         self.google_rl = 'You have reached your quota limit. Please try again later.'
         self.results = None
-        self.username = username
-        self.password = password
         # set user defined options used globally
         self.tz = tz
         self.hl = hl
@@ -69,28 +67,6 @@ class TrendReq(object):
             self.custom_useragent = {'User-Agent': 'PyTrends'}
         else:
             self.custom_useragent = {'User-Agent': custom_useragent}
-        self._connect()
-
-    def _connect(self):
-        """
-              Connect to Google.
-              Go to login page GALX hidden input value and send it back to google + login and password.
-              http://stackoverflow.com/questions/6754709/logging-in-to-google-using-python
-              """
-        self.ses = requests.session()
-        login_html = self.ses.get(self.url_login, headers=self.custom_useragent)
-        soup_login = BeautifulSoup(login_html.content, "lxml").find('form').find_all('input')
-        dico = {}
-        for u in soup_login:
-            if u.has_attr('value'):
-                try:
-                    dico[u['name']] = u['value']
-                except KeyError:
-                    pass
-        # override the inputs with out login and pwd:
-        dico['Email'] = self.username
-        dico['Passwd'] = self.password
-        self.ses.post(self.url_auth, data=dico)
 
     def GetGoogleCookie(self):
         """
