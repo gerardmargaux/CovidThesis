@@ -418,7 +418,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             if str(err.response) == '<Response [500]>':
                 write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
                 f = open(write_file, "a+")
-                f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}\n")
                 print(f"Error 500. Timeframe not available")
                 if end_cur == end_tot:
                     finished = True
@@ -436,7 +436,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
                 if trials > 3:
                     write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
                     f = open(write_file, "a+")
-                    f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                    f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}\n")
                     print("ReadTimeOut. Timeframe not available")
                     trials = 0
                     if end_cur == end_tot:
@@ -457,7 +457,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             if trials > 3:
                 write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
                 f = open(write_file, "a+")
-                f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}\n")
                 print("ReadTimeOut. Timeframe not available")
                 trials = 0
                 if end_cur == end_tot:
@@ -944,5 +944,5 @@ if __name__ == "__main__":
     }
 
     for title, mid in list_topics.items():
-        collect_historical_interest(mid, title, geo='FR-C')
+        collect_historical_interest(mid, title, geo='FR-P')
 
