@@ -944,10 +944,10 @@ if __name__ == "__main__":
     }
 
     for title, mid in list_topics.items():
-        collect_historical_interest(mid, title, geo='FR-S')
+        collect_historical_interest(mid, title, geo='FR-N')
     for title, mid in extract_topics().items():
-        collect_historical_interest(mid, title, geo='FR-R')
+        collect_historical_interest(mid, title, geo='FR-M')
     for title, mid in extract_topics().items():
-        collect_historical_interest(mid, title, geo='FR-O')
+        collect_historical_interest(mid, title, geo='FR-J')
 
 
