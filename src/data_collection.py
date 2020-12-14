@@ -16,6 +16,8 @@ import io
 import requests
 import re
 from requests.exceptions import ReadTimeout
+import traceback
+import sys
 
 # from src.prediction_model import *
 
@@ -328,7 +330,7 @@ def merge_trends_batches(left, right, overlap_hour, topic):
         return left.append(right_to_add)
     else:  # left has not the good scale
         left_to_add = left[left.index < overlap_start]
-        left_to_add = left_to_add * scaling
+        left_to_add = left_to_add / scaling
         return left_to_add.append(right)
 
 
@@ -351,19 +353,22 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
     hour_format = "%Y-%m-%dT%H"
     file = f"{dir}{geo}-{topic_title}.csv"
     min_delta = timedelta(days=3)
-    if end_tot is None:
-        end_tot = datetime.now()
+    if end_tot is None:  # if not speficied, get the latest day with 24 hours for data
+        end_tot = datetime.now().replace(microsecond=0, second=0, minute=0)
+        if end_tot.hour != 23:
+            end_tot = end_tot.replace(hour=23) - timedelta(days=1)
 
     if os.path.exists(file):  # load previous file
         date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
         df_tot = pd.read_csv(file, parse_dates=['date'], date_parser=date_parser).set_index('date')
+        idx_max = df_tot.index.max()
+        if end_tot == df_tot.index.max():
+            return df_tot
         max_batch = df_tot[batch_column].max()
         if len(df_tot.loc[df_tot[batch_column] == max_batch]) < 192:  # if the last batch was not done on a whole week
             df_tot = df_tot.loc[df_tot[batch_column] < max_batch]  # drop the last batch
         i = df_tot[batch_column].max() + 1  # id of the next batch
         begin_tot = df_tot.index.max() - timedelta(hours=(overlap_hour-1))
-        if end_tot - begin_tot < min_delta:  # must have a length of min 3 days
-            begin_tot = end_tot - min_delta
     else:
         df_tot = pd.DataFrame()
         if begin_tot is None:
@@ -372,18 +377,24 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
 
     begin_cur = begin_tot  # beginning of current batch
     end_cur = begin_tot + timedelta(days=7, hours=23)  # end of current batch
+    if end_cur > end_tot:  # end of date
+        end_cur = end_tot
+        if end_cur - begin_cur < min_delta:  # must have a length of min 3 days
+            begin_cur = end_cur - min_delta
+
     delta = timedelta(days=7, hours=23) - timedelta(hours=(overlap_hour-1))  # diff between 2 batches
     delay = 0
+    trials = 0
     finished = False
     if verbose:
         print(f"topic {topic_title} geo {geo}")
     while not finished:
+        timeframe = begin_cur.strftime(hour_format) + " " + end_cur.strftime(hour_format)
         try:
-            sleep(delay)
-            timeframe = begin_cur.strftime(hour_format) + " " + end_cur.strftime(hour_format)
+            sleep(delay + random.random())
             if verbose:
                 print(f"downloading {timeframe} ... ", end="")
-            pytrends = TrendReq("fr-BE")
+            pytrends = TrendReq(hl="fr-BE")
             pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
             df = pytrends.interest_over_time()
             if df.empty:
@@ -408,10 +419,65 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
 
             if verbose:
                 print("loaded")
-        except (ResponseError, ReadTimeout):  # use a delay if an error has been received
-            if verbose:
-                print("error when downloading. Retrying...")
+            trials = 0
+        except ResponseError as err:  # use a delay if an error has been received
+            if str(err.response) == '<Response [500]>':
+                write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
+                f = open(write_file, "a+")
+                f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                print(f"Error 500. Timeframe not available")
+                if end_cur == end_tot:
+                    finished = True
+                begin_cur += delta
+
+                if end_cur + delta > end_tot:  # end of date
+                    end_cur = end_tot
+                    if end_cur - begin_cur < min_delta:  # must have a length of min 3 days
+                        begin_cur = end_cur - min_delta
+                else:  # not end of date, increment
+                    end_cur = end_cur + delta
+            else:
+                trials += 1
+                delay = 60
+                if trials > 3:
+                    write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
+                    f = open(write_file, "a+")
+                    f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                    print("ReadTimeOut. Timeframe not available")
+                    trials = 0
+                    if end_cur == end_tot:
+                        finished = True
+                    begin_cur += delta
+
+                    if end_cur + delta > end_tot:  # end of date
+                        end_cur = end_tot
+                        if end_cur - begin_cur < min_delta:  # must have a length of min 3 days
+                            begin_cur = end_cur - min_delta
+                    else:  # not end of date, increment
+                        end_cur = end_cur + delta
+                if verbose:
+                    print(f"Error when downloading (ResponseError). Retrying after sleeping during {delay} sec ... Trial : {trials}")
+        except ReadTimeout:
+            trials += 1
             delay = 60
+            if trials > 3:
+                write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
+                f = open(write_file, "a+")
+                f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                print("ReadTimeOut. Timeframe not available")
+                trials = 0
+                if end_cur == end_tot:
+                    finished = True
+                begin_cur += delta
+
+                if end_cur + delta > end_tot:  # end of date
+                    end_cur = end_tot
+                    if end_cur - begin_cur < min_delta:  # must have a length of min 3 days
+                        begin_cur = end_cur - min_delta
+                else:  # not end of date, increment
+                    end_cur = end_cur + delta
+            if verbose:
+                print(f"Error when downloading (ReadTimeout). Retrying after sleeping during {delay} sec ... Trial : {trials}")
     return df_tot
 
 
@@ -839,5 +905,17 @@ if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-    collect_historical_interest('/m/0cjf0', 'fièvre', geo='BE')
+    #collect_historical_interest('/m/0cjf0', 'fièvre', geo='BE')
+    print(extract_topics())
+    """
+    for title, mid in extract_topics().items():
+        collect_historical_interest(mid, title, geo='BE')
+    for title, mid in extract_topics().items():
+        collect_historical_interest(mid, title, geo='FR-V')
+    for title, mid in extract_topics().items():
+        collect_historical_interest(mid, title, geo='FR-U')
+    for title, mid in extract_topics().items():
+        collect_historical_interest(mid, title, geo='FR-T')
+    """
+
 
