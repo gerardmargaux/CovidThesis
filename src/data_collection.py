@@ -11,12 +11,14 @@ from pytrends.dailydata import get_daily_data
 import os.path
 from os import listdir
 from datetime import date, datetime, timedelta
+from my_fake_useragent import UserAgent
 import random
 import io
 import requests
 import re
 from requests.exceptions import ReadTimeout
 import traceback
+import sys
 import sys
 
 # from src.prediction_model import *
@@ -25,6 +27,7 @@ google_geocodes = {
     'BE': "Belgique"
 }
 
+ua = UserAgent()
 
 def extract_topics(filename="topics.txt", to_list=False):
     """
@@ -394,6 +397,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             sleep(delay + random.random())
             if verbose:
                 print(f"downloading {timeframe} ... ", end="")
+            agent = ua.random()
             pytrends = TrendReq(hl="fr-BE")
             pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
             df = pytrends.interest_over_time()
@@ -424,7 +428,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             if str(err.response) == '<Response [500]>':
                 write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
                 f = open(write_file, "a+")
-                f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}\n")
                 print(f"Error 500. Timeframe not available")
                 if end_cur == end_tot:
                     finished = True
@@ -442,7 +446,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
                 if trials > 3:
                     write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
                     f = open(write_file, "a+")
-                    f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                    f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}\n")
                     print("ReadTimeOut. Timeframe not available")
                     trials = 0
                     if end_cur == end_tot:
@@ -463,7 +467,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
             if trials > 3:
                 write_file = f'../data/trends/collect/timeframe_not_available_{geo}.csv'
                 f = open(write_file, "a+")
-                f.write(f"{geo}, {topic_title}, {topic_mid}, {timeframe}")
+                f.writelines(f"{geo}, {topic_title}, {topic_mid}, {timeframe}\n")
                 print("ReadTimeOut. Timeframe not available")
                 trials = 0
                 if end_cur == end_tot:
@@ -905,17 +909,52 @@ if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-    #collect_historical_interest('/m/0cjf0', 'fièvre', geo='BE')
-    print(extract_topics())
-    """
-    for title, mid in extract_topics().items():
-        collect_historical_interest(mid, title, geo='BE')
-    for title, mid in extract_topics().items():
-        collect_historical_interest(mid, title, geo='FR-V')
-    for title, mid in extract_topics().items():
-        collect_historical_interest(mid, title, geo='FR-U')
-    for title, mid in extract_topics().items():
+    list_topics = {
+        'Fièvre': '/m/0cjf0',
+        'Mal de gorge': '/m/0b76bty',
+        'Dyspnée': '/m/01cdt5',
+        'Agueusie': '/m/05sfr2',
+        'Anosmie': '/m/0m7pl',
+        'Virus': '/m/0g9pc',
+        'Température corporelle humaine': '/g/1213j0cz',
+        'Épidémie': '/m/0hn9s',
+        'Symptôme': '/m/01b_06',
+        'Thermomètre': '/m/07mf1',
+        'Grippe espagnole': '/m/01c751',
+        'Paracétamol': '/m/0lbt3',
+        'Respiration': '/m/02gy9_',
+        'Toux': '/m/01b_21',
+        'Coronavirus': '/m/01cpyy'
+    }
+
+    geocodes = {
+        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-C': "Auvergne-Rhône-Alpes",
+        'FR-P': "Normandie",
+        'FR-D': "Bourgogne-Franche-Comté",
+        'FR-E': 'Bretagne',
+        'FR-F': 'Centre-Val de Loire',
+        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-H': 'Corse',
+        'FR-I': "Bourgogne-Franche-Comté",
+        'FR-Q': "Normandie",
+        'FR-J': 'Ile-de-France',
+        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        'FR-R': 'Pays de la Loire',
+        'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-U': "Provence-Alpes-Côte d'Azur",
+        'FR-V': "Auvergne-Rhône-Alpes",
+        'BE': "Belgique"
+    }
+
+    for title, mid in list_topics.items():
         collect_historical_interest(mid, title, geo='FR-T')
-    """
+
 
 
