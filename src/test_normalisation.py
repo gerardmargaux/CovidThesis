@@ -16,12 +16,12 @@ data_hourly_dir = "../data/trends/collect"
 geo = "BE"
 date_parser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
 df_hourly = {name: pd.read_csv(f"{data_hourly_dir}/{geo}-{name}.csv", parse_dates=['date'], date_parser=date_parser).set_index('date') for name in topics}
-print(df_hourly[topic_used])
+print(df_hourly[topic_used][df_hourly[topic_used]["batch_id"] == 20])
 df_hourly_drop = df_hourly[topic_used][df_hourly[topic_used]["batch_id"] != 20]
 df_hourly = df_hourly[topic_used]
 
 
-def merge_trends_batches(left, right, overlap_hour, topic):
+def merge_trends_batches(left, right, overlap_time, topic, isHour=True):
     """
     return the concatenation of left and right, correctly scaled based on their overlap (in hours)
 
@@ -34,7 +34,10 @@ def merge_trends_batches(left, right, overlap_hour, topic):
         return right
     # retrieve the overlapping points:
     overlap_start = right.index.min()
-    overlap_end = overlap_start + datetime.timedelta(hours=overlap_hour - 1)
+    if isHour:
+        overlap_end = overlap_start + datetime.timedelta(hours=overlap_time - 1)
+    else:
+        overlap_end = overlap_start + datetime.timedelta(days=overlap_time - 1)
     left_overlap = left[overlap_start:overlap_end]
     right_overlap = right[overlap_start:overlap_end]
     scaling = (left_overlap[topic] / right_overlap[topic]).mean()
@@ -71,7 +74,7 @@ def scale_df(df, topic):
             scaled_df = pd.DataFrame()
             continue
 
-        batch_df = df[df["batch_id"] == j]
+        batch_df = df[df["batch_id"] == j].drop(columns=["batch_id"])
         index_overlap = scaled_df.index.intersection(batch_df.index)
         overlap_hours = len(index_overlap)
         overlap_left = scaled_df.loc[index_overlap]
@@ -86,12 +89,14 @@ def scale_df(df, topic):
     list_scaled_df.append(scaled_df)
 
     # drop the period at the beginning and the end, in order to begin from YYYY-MM-DD:0h ->
+    """
     for i in range(len(list_scaled_df)):
         df = list_scaled_df[i]
         old_begin, old_end = df.index.min(), df.index.max()
         new_begin = old_begin + datetime.timedelta(hours=((24 - old_begin.hour) % 24))
         new_end = old_end - datetime.timedelta(hours=((old_end.hour + 1) % 24))
         list_scaled_df[i] = df[new_begin:new_end]
+    """
     return list_scaled_df
 
 
@@ -148,7 +153,7 @@ def mean_query(number, begin, end, topic, geo, cat=0):
             except:
                 sleep(10 + 10 * np.random.random())
         df = df[begin:end]
-        sleep(1 + np.random.random())
+        #sleep(1 + np.random.random())
         if 100 not in df[topic]:
             df[topic] = df[topic] * 100 / df[topic].max()
         df_tot[f"{topic}_{cnt}"] = df[topic]
@@ -159,50 +164,79 @@ def mean_query(number, begin, end, topic, geo, cat=0):
             return df_tot
 
 
-begin = datetime.datetime.strptime("2020-04-25", "%Y-%m-%d")
-end = datetime.datetime.strptime("2020-05-26", "%Y-%m-%d")
-df_interval = mean_query(100, begin, end, topic_code, geo)
+begin = datetime.datetime.strptime("2020-05-27", "%Y-%m-%d")
+end = datetime.datetime.strptime("2020-08-05", "%Y-%m-%d")
+df_interval = mean_query(20, begin, end, topic_code, geo)
 
 
 def error_no_impute(df_true, df_recompose):
     index_interval_a = df_true.index.intersection(df_recompose[0].index)
     index_interval_b = df_true.index.intersection(df_recompose[1].index)
-    MAE = max(np.mean(abs(df_true.iloc[index_interval_a] - df_recompose[0].iloc[index_interval_a])),
-              np.mean(abs(df_true.iloc[index_interval_b] - df_recompose[1].iloc[index_interval_b])))
-    MSE = max(np.mean((df_true.iloc[index_interval_a] - df_recompose[0].iloc[index_interval_a])**2),
-              np.mean((df_true.iloc[index_interval_b] - df_recompose[1].iloc[index_interval_b]) ** 2))
+    MAE = max(np.mean(abs(df_true.loc[index_interval_a] - df_recompose[0].loc[index_interval_a])),
+              np.mean(abs(df_true.loc[index_interval_b] - df_recompose[1].loc[index_interval_b])))
+    MSE = max(np.mean((df_true.loc[index_interval_a] - df_recompose[0].loc[index_interval_a])**2),
+              np.mean((df_true.loc[index_interval_b] - df_recompose[1].loc[index_interval_b]) ** 2))
     return MAE, MSE
 
 
-def error_impute(df_true, df_impute, interval):
-    MAE = np.mean(abs(df_true.iloc[interval] - df_impute.iloc[interval]))
-    MSE = np.mean((df_true.iloc[interval] - df_impute.iloc[interval])**2)
-    return MAE, MSE
+def error_impute(df_true, df_impute):
+    interval = df_true.index.intersection(df_impute.index)
+    MAE = np.mean(abs(df_true.loc[interval] - df_impute.loc[interval]))
+    MSE = np.mean((df_true.loc[interval] - df_impute.loc[interval])**2)
+    return MAE.tolist()[0], MSE.tolist()[0]
 
 
 def rescale_batch(df_left, df_right, df_daily):
-    pass
+    overlap = len(df_left.index.intersection(df_daily.index))
+    batch_rescaled = merge_trends_batches(df_left, df_daily, overlap, topic_code, isHour=False)
+    batch_rescaled = 100 * batch_rescaled / batch_rescaled.max()
+    overlap = len(batch_rescaled.index.intersection(df_right.index))
+    batch_rescaled = merge_trends_batches(batch_rescaled, df_right, overlap, topic_code, isHour=False)
+    batch_rescaled = 100 * batch_rescaled / batch_rescaled.max()
+    return batch_rescaled
+
+
+def drop_uncomplete_days(list_df):
+    for i in range(len(list_df)):
+        df = list_df[i]
+        old_begin, old_end = df.index.min(), df.index.max()
+        new_begin = old_begin + datetime.timedelta(hours=((24 - old_begin.hour) % 24))
+        new_end = old_end - datetime.timedelta(hours=((old_end.hour + 1) % 24))
+        list_df[i] = df[new_begin:new_end]
+    return list_df
 
 
 rolling_average_before = list(range(1, 16, 2))  # hourly
 rolling_average_after = list(range(1, 10, 2))  # daily agg.
 rolling_daily = list(range(1, 10, 2))  # daily
+scaled_df = drop_uncomplete_days([scaled_df])[0]
+scaled_df_daily = scaled_df.resample('D').mean()
+result = []
 
 for rolling_before in rolling_average_before:
     for rolling_after in rolling_average_after:
         for rolling_day in rolling_daily:
             # preprocess batch left
             batch_left = scaled_df_drop[0].rolling(rolling_before, center=True).mean().dropna()  # hourly
+            batch_left = drop_uncomplete_days([batch_left])[0]
             batch_left = batch_left.resample('D').mean()
             batch_left = batch_left.rolling(rolling_after, center=True).mean().dropna()  # daily
-            batch_left = batch_left * 100 / max(batch_left)
+            batch_left = batch_left * 100 / batch_left.max()
 
             # preprocess batch right
             batch_right = scaled_df_drop[1].rolling(rolling_before, center=True).mean().dropna()  # hourly
+            batch_right = drop_uncomplete_days([batch_right])[0]
             batch_right = batch_right.resample('D').mean()
             batch_right = batch_right.rolling(rolling_after, center=True).mean().dropna()  # daily
-            batch_right = batch_right * 100 / max(batch_right)
+            batch_right = batch_right * 100 / batch_right.max()
             # preprocess daily
             daily = df_interval.rolling(rolling_day, center=True).mean().dropna()  # daily
             batch_rescaled = rescale_batch(batch_left, batch_right, daily)
+            # true values
+            true_df = scaled_df_daily.rolling(rolling_after, center=True).mean().dropna()
+            true_df = 100 * true_df / true_df.max()
+            MAE, MSE = error_impute(true_df, batch_rescaled)
+            result.append([rolling_before, rolling_after, rolling_day, MAE, MSE])
 
+df_result = pd.DataFrame(result, columns=["rolling before", "rolling after", "rolling day", "MAE", "MSE"])
+df_result.to_csv("test_normalisation.csv")
