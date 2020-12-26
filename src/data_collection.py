@@ -17,8 +17,9 @@ import io
 import requests
 import re
 from requests.exceptions import ReadTimeout
+import numpy as np
+import operator
 import traceback
-import sys
 import sys
 
 # from src.prediction_model import *
@@ -125,7 +126,7 @@ def relevant_pytrends(init_file, start_year: int, start_mon: int, stop_year: int
             build_payload = partial(pytrends.build_payload,
                                     kw_list=[term], cat=0, geo=geo, gprop='')
             # new topics to evaluate
-            new_topics = _fetch_related(pytrends, build_payload, convert_dates_to_timeframe(start_date, stop_date),
+            new_topics = _fetch_related(pytrends, build_payload, dates_to_timeframe(start_date, stop_date),
                                         term)
             total_topics = {**new_topics, **total_topics}
 
@@ -240,7 +241,7 @@ def get_last_date_of_month(year: int, month: int) -> date:
     return date(year, month, monthrange(year, month)[1])
 
 
-def convert_dates_to_timeframe(start: date, stop: date) -> str:
+def dates_to_timeframe(start: date, stop: date) -> str:
     """
     Given two dates, returns a stringified version of the interval between
     the two dates which is used to retrieve data for a specific time frame
@@ -586,7 +587,7 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
     if (stop_date - start_date).days >= 365:
         # Obtain monthly data for all months in years [start_year, stop_year]
         monthly = _fetch_data(pytrends, build_payload,
-                              convert_dates_to_timeframe(start_date, stop_date))
+                              dates_to_timeframe(start_date, stop_date))
 
         # Get daily data, month by month
         results = {}
@@ -594,7 +595,7 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
         current = start_date
         while current < stop_date:
             last_date_of_month = get_last_date_of_month(current.year, current.month)
-            timeframe = convert_dates_to_timeframe(current, last_date_of_month)
+            timeframe = dates_to_timeframe(current, last_date_of_month)
             if verbose:
                 print(f'{word}:{timeframe}')
             results[current] = _fetch_data(pytrends, build_payload, timeframe)
@@ -611,7 +612,7 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
 
     else:
         complete = _fetch_data(pytrends, build_payload,
-                              convert_dates_to_timeframe(start_date, stop_date))
+                              dates_to_timeframe(start_date, stop_date))
 
     """ dataframe contains
     - word_unscaled: data with a top 0-100 monthly
@@ -905,10 +906,236 @@ def actualize_github():
     subprocess.run(f'git push', shell=True)
 
 
+def dates_iterator(begin, end, number):
+    """
+    yield different timeframes such that [begin, end] is always in the timeframe provided
+    uses the closest dates possible to provide the right number of timeframe
+    """
+    # maximum date allowed for google trends
+    max_end = datetime.today() - timedelta(days=4)
+    lag = int(np.ceil(np.sqrt(number)))
+    max_end_lag = (max_end - end).days + 1
+    # TODO max daily request is 269 days long (included). Need to check that the timeframe asked is not longer
+
+    # compute possible end and corresponding beginning
+    if lag > max_end_lag:
+        lag_end = max_end_lag
+        lag_begin = int(np.ceil(number / lag_end))
+    else:
+        lag_begin = lag
+        lag_end = lag
+
+    # yield timeframes
+    for i in range(lag_begin):
+        for j in range(lag_end):
+            begin_tf = begin - timedelta(days=i)
+            end_tf = end + timedelta(days=j)
+            yield begin_tf, end_tf
+
+
+def mean_query(number, begin, end, topic, geo, cat=0, verbose=True):
+    """
+    provide multiple queries on the period begin->end. the column topic contains the mean of the queries
+    the queries use different interval in order to provide different results
+    """
+
+    df_tot = pd.DataFrame()
+    cnt = 0
+    pytrends = TrendReq(retries=2, backoff_factor=0.1)
+
+    for k, (begin_tmp, end_tmp) in enumerate(dates_iterator(begin, end, number)):
+        timeframe= dates_to_timeframe(begin_tmp, end_tmp)
+        # Initialize build_payload with the word we need data for
+        build_payload = partial(pytrends.build_payload,
+                                kw_list=[topic], cat=0, geo=geo, gprop='')
+        if verbose:
+            print(f"timeframe= {timeframe} ({k + 1}/{number})")
+        df = _fetch_data(pytrends, build_payload, timeframe)
+        df = df[begin:end]
+        if 100 not in df[topic]:
+            df[topic] = df[topic] * 100 / df[topic].max()
+        df_tot[f"{topic}_{cnt}"] = df[topic]
+        cnt += 1
+        if cnt >= number:
+            df_tot[topic] = df_tot.mean(axis=1)
+            df_tot[topic] = 100 * df_tot[topic] / df_tot[topic].max()
+            return df_tot
+
+
+def timeframe_normalize_clusters(list_df, overlap=30):
+    """
+    take as input the list of df given by scale_df and return the list of dates needed to normalize
+    the whole set of data, as tuple of dates
+    """
+    list_tf = []
+    delta = timedelta(days=overlap)
+    max_end = datetime.today() - timedelta(days=4)
+    for df_i, df_j in zip(list_df, list_df[1:]):
+        begin = (df_i.index.max() - delta).to_pydatetime()
+        end = (df_j.index.min() + delta).to_pydatetime()
+        if end > max_end:
+            end = max_end
+        list_tf.append((begin, end))
+    return list_tf
+
+
+def min_timeframes_holes(list_df, number, overlap=30):
+    """
+    number: number of daily request made for the timeframes
+    """
+    # list of tuple (begin, end) needed for the normalization
+    list_interval = timeframe_normalize_clusters(list_df, overlap)
+    for interval in list_interval:
+        print(interval)
+    max_day = timedelta(days=200)
+    list_query = [list(dates_iterator(begin, end, number)) for begin, end in list_interval]
+    dates_query = []
+    max_iter = len(list_query)-2
+    skip_next = False
+
+    for i, (list_date_left, list_date_right) in enumerate(zip(list_query, list_query[1:])):
+        min_date = min(list_date_left)[0]
+        max_date = max(list_date_right, key=operator.itemgetter(1))[1]
+        if skip_next:
+            if i == max_iter:
+                min_right = min(list_date_right)[0]
+                dates_query.append((min_right, max_date))
+            skip_next = False
+            continue
+        if max_date - min_date <= max_day:
+            dates_query.append((min_date, max_date))
+            skip_next = True
+        else:
+            max_left = max(list_date_left, key=operator.itemgetter(1))[1]
+            dates_query.append((min_date, max_left))
+            if i == max_iter:
+                min_right = min(list_date_right)[0]
+                dates_query.append((min_right, max_date))
+    return dates_query
+
+
+def collect_holes_data(topic_mid, topic_title, number, begin, end, geo, cat=0, verbose=True):
+    """
+    collect the data using daily requests.
+    """
+    dir = "../data/trends/collect_daily/"
+    timeframe_included = dates_to_timeframe(begin, end).replace(" ", "-")
+    filename = f"{dir}{geo}-{topic_title}-{timeframe_included}.csv"
+    df_daily = mean_query(number, begin, end, topic_mid, geo=geo, cat=cat, verbose=verbose)
+    df_daily.to_csv(filename)
+
+
+def scale_df(df, topic):
+    """
+    Return a list of the scaled df. If there is always an overlap, the list contains one df.
+    Otherwhise, the list contains as many df as there are clusters of periods without missing data
+    Each df has its first datetime beginning at 0h and its last datetime ending at 23h
+    """
+    batch_id = df["batch_id"].to_list()
+
+    def f7(seq):
+        seen = set()
+        seen_add = seen.add
+        return [x for x in seq if not (x in seen or seen_add(x))]
+
+    batch_id = f7(batch_id)
+    list_scaled_df = []
+    scaled_df = pd.DataFrame()
+    for i, j in enumerate(batch_id):
+        if j < 0:  # the batch id was not valid
+            if not scaled_df.empty:
+                list_scaled_df.append(scaled_df)
+            scaled_df = pd.DataFrame()
+            continue
+
+        batch_df = df[df["batch_id"] == j].drop(columns=["batch_id"])
+        index_overlap = scaled_df.index.intersection(batch_df.index)
+        overlap_hours = len(index_overlap)
+        overlap_left = scaled_df.loc[index_overlap]
+        overlap_right = batch_df.loc[index_overlap]
+        if overlap_hours == 0 and scaled_df.empty:
+            scaled_df = merge_trends_batches(scaled_df, batch_df, overlap_hours, topic)
+        elif (overlap_left[topic] * overlap_right[topic]).sum() == 0:  # cannot perform the merge
+            list_scaled_df.append(scaled_df)
+            scaled_df = batch_df
+        else:
+            scaled_df = merge_trends_batches(scaled_df, batch_df, overlap_hours, topic)
+    list_scaled_df.append(scaled_df)
+
+    # drop the period at the beginning and the end, in order to begin from YYYY-MM-DD:0h ->
+    """
+    for i in range(len(list_scaled_df)):
+        df = list_scaled_df[i]
+        old_begin, old_end = df.index.min(), df.index.max()
+        new_begin = old_begin + datetime.timedelta(hours=((24 - old_begin.hour) % 24))
+        new_end = old_end - datetime.timedelta(hours=((old_end.hour + 1) % 24))
+        list_scaled_df[i] = df[new_begin:new_end]
+    """
+    return list_scaled_df
+
+
 if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
+    list_topics = {
+        'Fièvre': '/m/0cjf0',
+        'Mal de gorge': '/m/0b76bty',
+        'Dyspnée': '/m/01cdt5',
+        'Agueusie': '/m/05sfr2',
+        'Anosmie': '/m/0m7pl',
+        'Virus': '/m/0g9pc',
+        'Température corporelle humaine': '/g/1213j0cz',
+        'Épidémie': '/m/0hn9s',
+        'Symptôme': '/m/01b_06',
+        'Thermomètre': '/m/07mf1',
+        'Grippe espagnole': '/m/01c751',
+        'Paracétamol': '/m/0lbt3',
+        'Respiration': '/m/02gy9_',
+        'Toux': '/m/01b_21',
+        'Coronavirus': '/m/01cpyy'
+    }
+
+    geocodes = {
+        #'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        #'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        #'FR-C': "Auvergne-Rhône-Alpes",
+        #'FR-P': "Normandie",
+        #'FR-D': "Bourgogne-Franche-Comté",
+        #'FR-E': 'Bretagne',
+        #'FR-F': 'Centre-Val de Loire',
+        #'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        #'FR-H': 'Corse',
+        #'FR-I': "Bourgogne-Franche-Comté",
+        #'FR-Q': "Normandie",
+        #'FR-J': 'Ile-de-France',
+        #'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        #'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        #'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        #'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        #'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        #'FR-R': 'Pays de la Loire',
+        #'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        #'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        #'FR-U': "Provence-Alpes-Côte d'Azur",
+        #'FR-V': "Auvergne-Rhône-Alpes",
+        'BE': "Belgique"
+    }
+
+    data_hourly_dir = "../data/trends/collect"
+    date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+
+    for geo, geo_name in geocodes.items():
+        df_hourly = {name: pd.read_csv(f"{data_hourly_dir}/{geo}-{name}.csv", parse_dates=['date'],
+                                       date_parser=date_parser).set_index('date') for name in list_topics}
+        for topic_title, topic_code in list_topics.items():
+            print(f" ----- {geo}:{topic_title} -----")
+            scaled_df = scale_df(df_hourly[topic_title], topic_code)
+            list_timeframe = min_timeframes_holes(scaled_df, 20)
+            for begin, end in list_timeframe:
+                collect_holes_data(topic_code, topic_title, 20, begin, end, geo, verbose=True)
+
+    """
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
@@ -955,6 +1182,7 @@ if __name__ == "__main__":
 
     for title, mid in list_topics.items():
         collect_historical_interest(mid, title, geo='FR-T')
+    """
 
 
 

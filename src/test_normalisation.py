@@ -16,7 +16,6 @@ data_hourly_dir = "../data/trends/collect"
 geo = "BE"
 date_parser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
 df_hourly = {name: pd.read_csv(f"{data_hourly_dir}/{geo}-{name}.csv", parse_dates=['date'], date_parser=date_parser).set_index('date') for name in topics}
-print(df_hourly[topic_used][df_hourly[topic_used]["batch_id"] == 20])
 df_hourly_drop = df_hourly[topic_used][df_hourly[topic_used]["batch_id"] != 20]
 df_hourly = df_hourly[topic_used]
 
@@ -100,10 +99,6 @@ def scale_df(df, topic):
     return list_scaled_df
 
 
-scaled_df_drop = scale_df(df_hourly_drop, topic_code)[1:3]
-scaled_df = scale_df(df_hourly, topic_code)[1]
-
-
 # collect 100 daily req. and average them
 def mean_query(number, begin, end, topic, geo, cat=0):
     """
@@ -164,11 +159,6 @@ def mean_query(number, begin, end, topic, geo, cat=0):
             return df_tot
 
 
-begin = datetime.datetime.strptime("2020-05-27", "%Y-%m-%d")
-end = datetime.datetime.strptime("2020-08-05", "%Y-%m-%d")
-df_interval = mean_query(20, begin, end, topic_code, geo)
-
-
 def error_no_impute(df_true, df_recompose):
     index_interval_a = df_true.index.intersection(df_recompose[0].index)
     index_interval_b = df_true.index.intersection(df_recompose[1].index)
@@ -205,7 +195,11 @@ def drop_uncomplete_days(list_df):
         list_df[i] = df[new_begin:new_end]
     return list_df
 
-
+scaled_df_drop = scale_df(df_hourly_drop, topic_code)[1:3]
+scaled_df = scale_df(df_hourly, topic_code)[1]
+begin = datetime.datetime.strptime("2020-05-27", "%Y-%m-%d")
+end = datetime.datetime.strptime("2020-08-05", "%Y-%m-%d")
+df_interval = mean_query(20, begin, end, topic_code, geo)[[topic_code]]
 rolling_average_before = list(range(1, 16, 2))  # hourly
 rolling_average_after = list(range(1, 10, 2))  # daily agg.
 rolling_daily = list(range(1, 10, 2))  # daily
@@ -237,6 +231,22 @@ for rolling_before in rolling_average_before:
             true_df = 100 * true_df / true_df.max()
             MAE, MSE = error_impute(true_df, batch_rescaled)
             result.append([rolling_before, rolling_after, rolling_day, MAE, MSE])
+            if rolling_before == 1 and rolling_after == 1 and rolling_day == 3:
+                plt.figure()
+                plt.plot(batch_left, label="batch left")
+                plt.plot(batch_right, label="batch right")
+                plt.plot(daily, label="batch daily")
+                plt.grid()
+                plt.legend()
+                plt.show()
+                plt.figure()
+                plt.plot(true_df, label="true batch")
+                plt.plot(batch_rescaled, label="rescaled batch")
+                plt.grid()
+                plt.legend()
+                plt.show()
 
 df_result = pd.DataFrame(result, columns=["rolling before", "rolling after", "rolling day", "MAE", "MSE"])
 df_result.to_csv("test_normalisation.csv")
+
+
