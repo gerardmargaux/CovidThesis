@@ -1074,10 +1074,59 @@ def scale_df(df, topic):
     return list_scaled_df
 
 
+def correct_batch_id(topic_title, topic_code, geo):
+    data_dir = "../data/trends/collect"
+    csv_file = f'{data_dir}/{geo}-{topic_title}.csv'
+    df = pd.read_csv(csv_file)
+    list_dates = df['date'].tolist()
+    list_batches = df['batch_id'].tolist()
+    list_trends = df[topic_code].tolist()
+    current_batch = 0
+    new_list_trends = [list_trends[0]]
+    new_list_batches = [list_batches[0]]
+    new_list_date = [list_dates[0]]
+    added_batches = 0
+    for i in range(1, len(list_dates)):
+        d1 = datetime.strptime(list_dates[i-1], "%Y-%m-%d %H:%M:%S")
+        d2 = datetime.strptime(list_dates[i], "%Y-%m-%d %H:%M:%S")
+        diff = abs((d2 - d1))
+        diff_hours = (diff.seconds/3600) + 24*diff.days
+        if diff_hours > 72:  # There is a missing batch
+            begin = datetime.strptime(list_dates[i-1], "%Y-%m-%d %H:%M:%S") + timedelta(hours=1)
+            end = datetime.strptime(list_dates[i], "%Y-%m-%d %H:%M:%S") - timedelta(hours=1)
+            date_iterator = pd.date_range(begin, end, freq='H')
+            date_iterator = date_iterator.strftime("%Y-%m-%d %H:%M:%S").tolist()
+            current_batch += 1
+            added_batches += 1
+            for date in date_iterator:
+                new_list_date.append(date)
+                new_list_trends.append(0)
+                new_list_batches.append(-current_batch)
+            current_batch += 1
+            new_list_date.append(list_dates[i])
+            new_list_batches.append(current_batch)
+            new_list_trends.append(list_trends[i])
+        else:
+            if list_batches[i-1] != list_batches[i]:
+                current_batch = list_batches[i] + added_batches
+            new_list_date.append(list_dates[i])
+            new_list_batches.append(current_batch)
+            new_list_trends.append(list_trends[i])
+
+    final_df = pd.DataFrame()
+    final_df = pd.concat([final_df, pd.DataFrame(new_list_date)], axis=1)
+    final_df = pd.concat([final_df, pd.DataFrame(new_list_trends)], axis=1)
+    final_df = pd.concat([final_df, pd.DataFrame(new_list_batches)], axis=1)
+    final_df.columns = ["date", topic_code, "batch_id"]
+    final_df.to_csv(csv_file, index=False)
+    return final_df
+
+
 if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
+
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
@@ -1097,28 +1146,28 @@ if __name__ == "__main__":
     }
 
     geocodes = {
-        #'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-        #'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-        #'FR-C': "Auvergne-Rhône-Alpes",
-        #'FR-P': "Normandie",
-        #'FR-D': "Bourgogne-Franche-Comté",
-        #'FR-E': 'Bretagne',
-        #'FR-F': 'Centre-Val de Loire',
-        #'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-        #'FR-H': 'Corse',
-        #'FR-I': "Bourgogne-Franche-Comté",
-        #'FR-Q': "Normandie",
-        #'FR-J': 'Ile-de-France',
-        #'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-        #'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-        #'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-        #'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-        #'FR-O': 'Nord-Pas-de-Calais-Picardie',
-        #'FR-R': 'Pays de la Loire',
-        #'FR-S': 'Nord-Pas-de-Calais-Picardie',
-        #'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
-        #'FR-U': "Provence-Alpes-Côte d'Azur",
-        #'FR-V': "Auvergne-Rhône-Alpes",
+        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-C': "Auvergne-Rhône-Alpes",
+        'FR-P': "Normandie",
+        'FR-D': "Bourgogne-Franche-Comté",
+        'FR-E': 'Bretagne',
+        'FR-F': 'Centre-Val de Loire',
+        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-H': 'Corse',
+        'FR-I': "Bourgogne-Franche-Comté",
+        'FR-Q': "Normandie",
+        'FR-J': 'Ile-de-France',
+        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        'FR-R': 'Pays de la Loire',
+        'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-U': "Provence-Alpes-Côte d'Azur",
+        'FR-V': "Auvergne-Rhône-Alpes",
         'BE': "Belgique"
     }
 
