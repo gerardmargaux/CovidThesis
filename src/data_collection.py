@@ -679,7 +679,7 @@ def load_term(termname, term, dir="../data/trends/explore/", geo="BE-WAL", start
     return content
 
 
-def create_dataframe_belgium(hospi_belgium='be-covid-hospi.csv'):
+def create_dataframe_belgium(hospi_belgium='../data/hospi/be-covid-hospi.csv'):
     data_be = pd.read_csv(hospi_belgium).groupby(["DATE"]).agg({"NEW_IN": "sum"}).reset_index().rename(
         columns={"NEW_IN": "HOSP"})
 
@@ -692,6 +692,23 @@ def create_dataframe_belgium(hospi_belgium='be-covid-hospi.csv'):
         toadd.append([cur.strftime("%Y-%m-%d"), 'Belgique', 0])
         cur += timedelta(days=1)
     data_be = data_be.append(pd.DataFrame(toadd, columns=["DATE", "LOC", "HOSP"])).set_index(["LOC", "DATE"])
+    data_be = data_be.sort_index()
+    list_hospi = data_be['HOSP']
+    new_list_hospi = [0]
+    for i in range(1, len(list_hospi)):
+        diff = list_hospi[i] - list_hospi[i-1]
+        if diff == 0 or list_hospi[i] == 0:
+            new_list_hospi.append(0)
+        else:
+            if list_hospi[i-1] == 0 and list_hospi[i] != 0:
+                new_list_hospi.append(1.0)
+            else:
+                diff = diff / list_hospi[i-1]
+                new_list_hospi.append(diff)
+    # Normalization between 0 and 1
+    new_list_hospi = [(x-min(new_list_hospi))/(max(new_list_hospi)-min(new_list_hospi)) for x in new_list_hospi]
+    data_be['HOSP'] = new_list_hospi
+    print(data_be)
     return data_be
 
 
@@ -1126,7 +1143,7 @@ if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-
+   
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
