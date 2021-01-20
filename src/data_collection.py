@@ -893,19 +893,27 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
             df.to_csv(csv_file)
 
 
-def actualize_hospi(url_hospi_belgium, url_hospi_france):
+def actualize_hospi(url_hospi_belgium, url_hospi_france_tot, url_hospi_france_new):
     # Get hospi for Belgium
     encoded_path_be = requests.get(url_hospi_belgium).content
     df_hospi_be = pd.read_csv(io.StringIO(encoded_path_be.decode("utf-8"))).drop(axis=1, columns='Unnamed: 0')
     df_hospi_be.to_csv('../data/hospi/be-covid-hospi.csv', index=True)
 
-    # Get hospi for France
-    encoded_path_fr = requests.get(url_hospi_france).content
+    # Get total number of hospi for France
+    encoded_path_fr = requests.get(url_hospi_france_tot).content
     df_hospi_fr = pd.read_csv(io.StringIO(encoded_path_fr.decode("utf-8")))
     df_hospi_fr = df_hospi_fr.rename(columns=lambda s: s.replace('"', ''))
     for i, col in enumerate(df_hospi_fr.columns):
         df_hospi_fr.iloc[:, i] = df_hospi_fr.iloc[:, i].str.replace('"', '')
     df_hospi_fr.to_csv('../data/hospi/fr-covid-hospi-total.csv', index=False)
+
+    # Get total number of hospi for France
+    encoded_path_fr_new = requests.get(url_hospi_france_new).content
+    df_hospi_fr_new = pd.read_csv(io.StringIO(encoded_path_fr_new.decode("utf-8")))
+    df_hospi_fr_new = df_hospi_fr_new.rename(columns=lambda s: s.replace('"', ''))
+    for i, col in enumerate(df_hospi_fr_new.columns):
+        df_hospi_fr_new.iloc[:, i] = df_hospi_fr_new.iloc[:, i].str.replace('"', '')
+    df_hospi_fr_new.to_csv('../data/hospi/fr-covid-hospi.csv', index=False)
     return
 
 
@@ -1143,7 +1151,13 @@ if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-   
+    url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
+    url_hospi_france_new = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
+    url_hospi_france_tot = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
+    actualize_hospi(url_hospi_belgium, url_hospi_france_tot, url_hospi_france_new)
+    actualize_github()
+
+    """
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
@@ -1201,7 +1215,7 @@ if __name__ == "__main__":
             for begin, end in list_timeframe:
                 collect_holes_data(topic_code, topic_title, 20, begin, end, geo, verbose=True)
 
-    """
+    
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
