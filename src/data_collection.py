@@ -21,14 +21,30 @@ import numpy as np
 import operator
 import traceback
 import sys
+from typing import List, Iterator, Tuple, Dict
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
 
 # from src.prediction_model import *
+
+# maximum number of days that can be queried before getting a request sampled by week, including the first and last day
+# (2020-01-01 -> 2020-01-02 cover 2 days)
+max_query_days = 270
 
 google_geocodes = {
     'BE': "Belgique"
 }
 
 ua = UserAgent()
+
+
+def latest_trends_daily_date():
+    """
+    :return latest google trends date that can be queried using the daily requests
+    """
+    return datetime.today() - timedelta(days=4)
+
 
 def extract_topics(filename="topics.txt", to_list=False):
     """
@@ -164,6 +180,28 @@ def relevant_pytrends(init_file, start_year: int, start_mon: int, stop_year: int
     df.drop_duplicates(subset='Topic_title', keep='first', inplace=True)  # drop duplicates in the dataframe
     df.reset_index(0, inplace=True, drop=True)  # reset the index --> index = date
     df.to_csv('../data/trends/explore/related_topics.csv')  # write results in a csv file
+
+
+def plot_trends(df_plot, topic_code, show=True):
+    fig = plt.figure()
+    if isinstance(df_plot, list):
+        list_df = df_plot
+    else:
+        list_df = [df_plot]
+    for df in list_df:
+        df_plot = 100 * df[[topic_code]] / df[[topic_code]].max()
+        plt.plot(df_plot, label="hourly data")
+    ax = fig.axes[0]
+    # set monthly locator
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    # set formatter
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt.grid()
+    if show:
+        plt.show()
+    return fig
 
 
 def find_correlation_explore(file_hospi="be-covid-hospi.csv"):
@@ -311,36 +349,61 @@ def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
     return {**dic_rising, **dic_top}
 
 
-def merge_trends_batches(left, right, overlap_hour, topic):
+def merge_trends_batches(left, right, overlap_time, topic, is_hour=True, verbose=False, drop=None):
     """
-    return the concatenation of left and right, correctly scaled based on their overlap (in hours)
+    return the concatenation of left and right, correctly scaled based on their overlap (in hours or days)
 
     :param left: accumulator dataframe
     :param right: new dataframe to add to the accumulator
-    :param overlap_hour: number of hours that are overlapping
-    :param topic: topic considered
+    :param overlap_time: number of time points that are overlapping
+    :param topic: topic code considered
+    :param is_hour: if true, the overlap is computed in hours. Else in days
+    :param verbose: True if information must be printed
+    :param drop: can be one of None, 'left' or 'right'. The function can choose to keep scaled values
+        from left or right on the intersection. If drop == left -> keep the right values, if drop == right ->
+        keep the left values. Else take whatever value.
     """
     if left.empty:
         return right
     # retrieve the overlapping points:
     overlap_start = right.index.min()
-    overlap_end = overlap_start + timedelta(hours=overlap_hour-1)
+    if is_hour:
+        overlap_end = overlap_start + timedelta(hours=overlap_time - 1)
+    else:
+        overlap_end = overlap_start + timedelta(days=overlap_time - 1)
     left_overlap = left[overlap_start:overlap_end]
     right_overlap = right[overlap_start:overlap_end]
-    scaling = (left_overlap[topic] / right_overlap[topic]).mean()
+    scaling_full = (left_overlap[topic] / right_overlap[topic]).replace([np.inf, -np.inf], np.nan).dropna()
+    if verbose:
+        print('overlap left:', left_overlap[topic])
+        print('overlap right:', right_overlap[topic])
+        print('ratio:', scaling_full)
+        print("my drop=",drop)
+    scaling = scaling_full.mean()
     if scaling < 1:  # right has not the good scale
-        right_to_add = right[right.index > overlap_end]
-        right_to_add = right_to_add * scaling
-        return left.append(right_to_add)
+        if drop == 'left':
+            left_to_keep = left[left.index < overlap_start]
+            right_to_add = right * scaling
+            return left_to_keep.append(right_to_add)
+        else:
+            right_to_add = right[right.index > overlap_end]
+            right_to_add = right_to_add * scaling
+            return left.append(right_to_add)
     else:  # left has not the good scale
-        left_to_add = left[left.index < overlap_start]
-        left_to_add = left_to_add / scaling
-        return left_to_add.append(right)
+        if drop == 'right':
+            right_to_keep = right[right.index > overlap_end]
+            left_to_add = left / scaling
+            return left_to_add.append(right_to_keep)
+        else:
+            left_to_add = left[left.index < overlap_start]
+            left_to_add = left_to_add / scaling
+            return left_to_add.append(right)
 
 
-def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end_tot=None, overlap_hour=15, verbose=True):
+def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begin_tot: datetime = None,
+                                end_tot: datetime = None, overlap_hour: int = 15, verbose: bool = True) -> pd.DataFrame:
     """
-    load and collect hourly trends data for a given topic over a certain region
+    load collect and save hourly trends data for a given topic over a certain region
 
     :param topic_mid: mid code
     :param topic_title: title of the topic
@@ -357,7 +420,7 @@ def collect_historical_interest(topic_mid, topic_title, geo, begin_tot=None, end
     hour_format = "%Y-%m-%dT%H"
     file = f"{dir}{geo}-{topic_title}.csv"
     min_delta = timedelta(days=3)
-    if end_tot is None:  # if not speficied, get the latest day with 24 hours for data
+    if end_tot is None:  # if not specified, get the latest day with 24 hours for data
         end_tot = datetime.now().replace(microsecond=0, second=0, minute=0)
         if end_tot.hour != 23:
             end_tot = end_tot.replace(hour=23) - timedelta(days=1)
@@ -931,31 +994,56 @@ def actualize_github():
     subprocess.run(f'git push', shell=True)
 
 
-def dates_iterator(begin, end, number):
+def largest_dates_iterator(begin: datetime, end: datetime, number: int) -> Tuple[datetime, datetime]:
     """
-    yield different timeframes such that [begin, end] is always in the timeframe provided
-    uses the closest dates possible to provide the right number of timeframe
+    gives the largest interval of dates that will be used by dates_iterator
+    :param begin: date of beginning for the query
+    :param end: date of end for the query
+    :param number: amount of queries that must cover this interval
+    :return largest interval of dates that will be used
     """
-    # maximum date allowed for google trends
-    max_end = datetime.today() - timedelta(days=4)
-    lag = int(np.ceil(np.sqrt(number)))
-    max_end_lag = (max_end - end).days + 1
-    # TODO max daily request is 269 days long (included). Need to check that the timeframe asked is not longer
+    min_date = datetime.today()
+    max_date = datetime.strptime("1990-01-01", "%Y-%m-%d")
+    for date_a, date_b in dates_iterator(begin, end, number):
+        min_date = min(min_date, date_a)
+        max_date = max(max_date, date_b)
+    return min_date, max_date
 
-    # compute possible end and corresponding beginning
-    if lag > max_end_lag:
-        lag_end = max_end_lag
-        lag_begin = int(np.ceil(number / lag_end))
-    else:
-        lag_begin = lag
-        lag_end = lag
 
-    # yield timeframes
-    for i in range(lag_begin):
-        for j in range(lag_end):
-            begin_tf = begin - timedelta(days=i)
-            end_tf = end + timedelta(days=j)
-            yield begin_tf, end_tf
+def dates_iterator(begin: datetime, end: datetime, number: int) -> Iterator[Tuple[datetime, datetime]]:
+    """
+    return the largest interval of dates that must be available to provide number queries on the interval
+    :param begin: date of beginning for the query
+    :param end: date of end for the query
+    :param number: amount of queries that must cover this interval
+    :return yield number tuples of dates (a, b), that cover [begin, end]
+    """
+    # maximum date allowed for google trends, included
+    max_end = latest_trends_daily_date()
+    number_given = 0
+    lag_left = 0
+    lag_right = 0
+    if end > max_end:  # impossible to provide the queries
+        return []
+    while number_given < number:
+        i = 0
+        while number_given < number and i <= lag_right:
+            wanted_end = end + timedelta(days=i)
+            if wanted_end <= max_end:
+                number_given += 1
+                yield begin - timedelta(days=lag_left), wanted_end
+            i += 1
+
+        wanted_end = end + timedelta(days=lag_right)
+        if wanted_end <= max_end:
+            j = lag_left-1
+            while number_given < number and j >= 0:
+                number_given += 1
+                yield begin - timedelta(days=j), wanted_end
+                j -= 1
+
+        lag_left += 1
+        lag_right += 1
 
 
 def mean_query(number, begin, end, topic, geo, cat=0, verbose=True):
@@ -963,16 +1051,15 @@ def mean_query(number, begin, end, topic, geo, cat=0, verbose=True):
     provide multiple queries on the period begin->end. the column topic contains the mean of the queries
     the queries use different interval in order to provide different results
     """
-
     df_tot = pd.DataFrame()
     cnt = 0
     pytrends = TrendReq(retries=2, backoff_factor=0.1)
 
     for k, (begin_tmp, end_tmp) in enumerate(dates_iterator(begin, end, number)):
-        timeframe= dates_to_timeframe(begin_tmp, end_tmp)
+        timeframe = dates_to_timeframe(begin_tmp, end_tmp)
         # Initialize build_payload with the word we need data for
         build_payload = partial(pytrends.build_payload,
-                                kw_list=[topic], cat=0, geo=geo, gprop='')
+                                kw_list=[topic], cat=cat, geo=geo, gprop='')
         if verbose:
             print(f"timeframe= {timeframe} ({k + 1}/{number})")
         df = _fetch_data(pytrends, build_payload, timeframe)
@@ -989,12 +1076,12 @@ def mean_query(number, begin, end, topic, geo, cat=0, verbose=True):
 
 def timeframe_normalize_clusters(list_df, overlap=30):
     """
-    take as input the list of df given by scale_df and return the list of dates needed to normalize
+    take as input the list of df given by sanitize_hourly_data and return the list of dates needed to normalize
     the whole set of data, as tuple of dates
     """
     list_tf = []
     delta = timedelta(days=overlap)
-    max_end = datetime.today() - timedelta(days=4)
+    max_end = latest_trends_daily_date()
     for df_i, df_j in zip(list_df, list_df[1:]):
         begin = (df_i.index.max() - delta).to_pydatetime()
         end = (df_j.index.min() + delta).to_pydatetime()
@@ -1004,9 +1091,335 @@ def timeframe_normalize_clusters(list_df, overlap=30):
     return list_tf
 
 
+def drop_incomplete_days(list_df: List[pd.DataFrame]) -> List[pd.DataFrame]:
+    """
+    filter a list of hourly dataframes, to return a list where each dataframe:
+    - begins at MM-DD-0h
+    - ends at MM-DD-23h
+    - contains at least 3 days of data
+    - has at least 3 points of value > 10
+    - has less than 10 consecutive values of 0 at the end / beginning
+    :param list_df: list of dataframes to filter
+    """
+    result = []
+    for i in range(len(list_df)):
+        df = list_df[i]
+        old_begin, old_end = df.index.min(), df.index.max()
+        new_begin = old_begin + timedelta(hours=((24 - old_begin.hour) % 24))  # MM-DD-0h
+        new_end = old_end - timedelta(hours=((old_end.hour + 1) % 24))  # MM-DD-23h
+        cur_df = df[new_begin:new_end]
+        # check for chain of zeros at the beginning and the end
+        has_zero = True
+        hours_drop = 10  # consecutive values to check
+        delta = timedelta(hours=hours_drop)
+        while has_zero and new_begin < new_end:  # zeros at the beginning
+            if cur_df[new_begin:new_begin + delta].sum()[0] == 0:
+                new_begin += timedelta(days=1)
+            else:
+                has_zero = False
+
+        has_zero = True
+        while has_zero and new_begin < new_end:  # zeros at the end
+            if cur_df[new_end - delta:new_end].sum()[0] == 0:
+                new_end -= timedelta(days=1)
+            else:
+                has_zero = False
+        # new dates for the dataframe
+        cur_df = cur_df[new_begin:new_end]
+        # check if the resulting dataframe can be added
+        if not cur_df.empty and (new_end - new_begin).days >= 2 and len(np.where(cur_df > 10)[0]) > 3:
+            result.append(cur_df)
+    return result
+
+
+def sanitize_hourly_data(df: pd.DataFrame, topic_code: str) -> List[pd.DataFrame]:
+    """
+    sanitize hourly data, transforming it to a list of daily data and removing missing values
+    :param df: dataframe of hourly data on a trends topic, indexed by hourly dates
+    :param topic_code: code for the topic
+    :return list of data sanitized: missing values are removed, leading to dataframes with holes between one another
+    """
+    list_df_hourly = scale_df(df, topic_code)  # scale the dataframe
+    list_df_hourly = drop_incomplete_days(list_df_hourly)  # drop the incomplete days (check doc for details)
+    list_df_hourly = [df.resample('D').mean() for df in list_df_hourly]  # aggregate to daily data
+    return list_df_hourly
+
+
+def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_daily: List[pd.DataFrame], overlap: int = 30)\
+        -> Tuple[pd.DataFrame, bool]:
+    """
+    find daily dataframe with the largest intersection on df_a and df_b
+    :param df_a: first dataframe
+    :param df_b: second dataframe
+    :param list_df_daily: list of dataframe to consider in order to find the one with the largest intersection
+    :param overlap: number of overlap that should be used for the intersection
+    """
+    best_inter = -1
+    best_df = None
+    can_be_actualized = True  # true if the largest date must be actualized
+    max_date = latest_trends_daily_date()
+    max_overlap_left = min(len(df_a), overlap)  # upper bound considered for the overlap
+    max_overlap_right = min(len(df_b), overlap)
+    for df_candidate in list_df_daily:
+        intersection_left = len(df_a.index.intersection(df_candidate.index))
+        intersection_right = len(df_b.index.intersection(df_candidate.index))
+        inter = min(intersection_left, intersection_right)
+        if inter >= best_inter:
+            best_df = df_candidate
+            best_inter = inter
+            if intersection_right < max_overlap_right and df_candidate.index.max() < max_date:  # new data is available
+                can_be_actualized = True
+            elif intersection_left < max_overlap_left:  # better data can be found
+                can_be_actualized = True
+            else:
+                can_be_actualized = False
+    if best_df is None:
+        raise Exception("No dataframe could be found for the gap")
+    return best_df, can_be_actualized
+
+
+def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number: int = 20, overlap: int = 30,
+                      verbose: bool = True) -> pd.DataFrame:
+    """
+    collect the daily data on the gap where the hourly data could not be retrieved
+    if the daily data is outdated or absent, it is collected and saved to a csv file
+    :param geo: geocode that must be queried
+    :param topic_title: title of the topic to query
+    :param topic_mid: code of the topic to query
+    :param number: number of daily queries to do on the gaps
+    :param overlap: number of overlapping points between a daily request and the 2 hourly requests around it
+    :param verbose: whether to display information while running or not
+    :return model dataframe
+    """
+    data_daily_dir = "../data/trends/collect_daily"
+    data_hourly_dir = "../data/trends/collect"
+    data_model_dir = "../data/trends/model"
+    # retrieve the hourly data
+    date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+    df_hourly = pd.read_csv(f"{data_hourly_dir}/{geo}-{topic_title}.csv", parse_dates=['date'],
+                            date_parser=date_parser).set_index('date')
+    # transform the hourly data to a list of daily data
+    list_df_hourly = sanitize_hourly_data(df_hourly, topic_mid)
+    # collect the existing daily data
+    pattern = "([A-Z]{2}(?:-[A-Z])?)-(\D*)-(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})\.csv"
+    starting_pattern = f"{geo}-{topic_title}"
+    existing_files = [filename for filename in os.listdir(data_daily_dir) if filename.startswith(starting_pattern)]
+    date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d")
+    list_daily_df = [pd.read_csv(f"{data_daily_dir}/{file}", parse_dates=['date'],
+                                 date_parser=date_parser).set_index('date')[[topic_mid]] for file in existing_files]
+    # check if the gaps can be covered with the existing daily requests saved
+    list_dates_actualize = []
+    list_daily_intersection = []
+    for df_a, df_b in zip(list_df_hourly, list_df_hourly[1:]):
+        df_intersection, can_be_actualized = find_largest_intersection(df_a, df_b, list_daily_df, overlap=overlap)
+        if can_be_actualized:  # new data can be queried
+            # overlap-1 because the date is included
+            a = df_a.index.max() - timedelta(days=overlap-1)
+            a = a.to_pydatetime()
+            dates_query = (df_a.index.max() - timedelta(days=overlap-1)).to_pydatetime(), \
+                          min((df_b.index.min() + timedelta(days=overlap-1)).to_pydatetime(), latest_trends_daily_date())
+            list_dates_actualize.append(dates_query)
+        else:  # the query respect the expected overlap
+            list_daily_intersection.append(df_intersection)
+    files_to_remove = []
+    for i, df in enumerate(list_daily_df):
+        to_remove = True
+        for df_chosen in list_daily_intersection:
+            if df is df_chosen:
+                to_remove = False
+                break
+        if to_remove:
+            files_to_remove.append(existing_files[i])
+
+    # do the request for the dataframes to actualize
+    min_dates = find_min_dates_queries(list_dates_actualize, number)
+    if min_dates and verbose:
+        print("querying new interval")
+    for begin, end in min_dates:
+        df = collect_holes_data(topic_mid, topic_title, number, begin, end, geo, cat=0, verbose=verbose)
+        list_daily_intersection.append(df[[topic_mid]])
+
+    # remove the old daily dataframes that are not used anymore
+    for file in files_to_remove:
+        if verbose:
+            print(f"removing {data_daily_dir}/{file}")
+        os.remove(f"{data_daily_dir}/{file}")
+
+    # form the model data and save it to csv
+    complete_df = merge_hourly_daily(list_df_hourly, list_daily_intersection, topic_mid, drop=True)
+    filename = f"{data_model_dir}/{geo}-{topic_title}.csv"
+    # complete_df.to_csv(filename)
+    return complete_df
+
+
+def rescale_batch(df_left, df_right, df_daily, topic_code, overlap_max=30, rolling=3, overlap_min=3, drop=True):
+    """
+    rescale a left and a right batch with a hole in between, covered by df_daily
+    :param df_left: DataFrame on the left interval
+    :param df_right: DataFrame on the right interval
+    :param df_daily: DataFrame with data between df_left and df_right, used for the merge
+    :param overlap_max: maximum number of datapoints used for the overlap
+    :param rolling: rolling average on the df_daily data
+    :param overlap_min: minimum number of points on the intersection allowed to accept a rolling average.
+        If the rolling average provide less points, df_daily is used instead of the rolling data.
+    :param drop: whether to drop preferabily the df_daily data on the interval or not
+    :return batch_rescaled: DataFrame of data between df_left.min and df_right.max
+    """
+    if drop:
+        drop = ['right', 'left']
+    else:
+        drop = [None, None]
+
+    daily_rolling = df_daily.rolling(rolling, center=True).mean().dropna()
+    daily_rolling = 100 * daily_rolling / daily_rolling.max()
+    overlap = df_left.index.intersection(daily_rolling.index)
+    overlap_right = daily_rolling.index.intersection(df_right.index)
+    # print(len(overlap))
+    # print(len(overlap_right))
+    if len(overlap) < overlap_min or len(overlap_right) < overlap_min:
+        overlap = df_left.index.intersection(df_daily.index)
+        daily_used = df_daily
+    else:
+        daily_used = daily_rolling
+
+    if len(overlap) > overlap_max:
+        overlap = overlap[-overlap_max:]
+    overlap_len = len(overlap)
+    daily_used[daily_used < 0.01] = 0
+    # print("overlap left len", overlap_len)
+    # print("left")
+    # plot_trends(df_left, df_left.columns[0])
+    # print("daily")
+    # plot_trends(daily_used, df_left.columns[0])
+    batch_rescaled = merge_trends_batches(df_left, daily_used[overlap.min():], overlap_len, topic_code,
+                                          is_hour=False, verbose=False, drop=drop[0])
+    batch_rescaled = 100 * batch_rescaled / batch_rescaled.max()
+    overlap = batch_rescaled.index.intersection(df_right.index)
+    if len(overlap) > overlap_max:
+        overlap = overlap[:overlap_max]
+    overlap_len = len(overlap)
+    # print("overlap right len", overlap_len)
+    # print("temporary merge")
+    # plot_trends(batch_rescaled, batch_rescaled.columns[0])
+    # print("right")
+    # plot_trends(df_right, df_left.columns[0])
+    batch_rescaled = merge_trends_batches(batch_rescaled[:overlap.max()], df_right, overlap_len, topic_code,
+                                          is_hour=False, verbose=False, drop=drop[1])
+    batch_rescaled = 100 * batch_rescaled / batch_rescaled.max()
+    # print("merge final")
+    # plot_trends(batch_rescaled, batch_rescaled.columns[0])
+    return batch_rescaled
+
+
+def merge_hourly_daily(list_df_hourly: List[pd.DataFrame], list_df_daily: List[pd.DataFrame], topic_code: str,
+                       drop: bool, add_daily_end=True):
+    """
+    merge the hourly (deterministic) aggregated batches, using the daily (stochastic) batches on the missing interval
+    :param list_df_hourly: sorted list of deterministic DataFrame, having a daily index
+    :param list_df_daily: list of stochastic DataFrame, having data on the missing interval of list_df_hourly
+    :param topic_code: topic code
+    :param drop: whether to drop the stochastic data preferably or not
+    :param add_daily_end: if True, add daily data data at the end if the max date of daily data > max date of hourly data
+    :return df: merged DataFrame
+    """
+
+    for i, df_right in enumerate(list_df_hourly):
+        if i == 0:
+            df = df_right
+        else:
+            df_daily, _ = find_largest_intersection(df, df_right, list_df_daily)
+            df = rescale_batch(df, df_right, df_daily, topic_code, drop=drop)
+
+    if add_daily_end:  # attempt to add daily data at the end
+        daily_possible = [df_daily for df_daily in list_df_daily if df_daily.index.max() > df.index.max()]
+        if len(daily_possible) != 0:
+            column = df.columns[0]
+            while len(daily_possible) > 0:
+                candidate = max(daily_possible, key=lambda df_daily: df_daily.index.intersection(df.index))
+                overlap_len = len(df.index.intersection(candidate.index))
+                if overlap_len == 0:  # not possible to add the data since there is not overlap
+                    break
+                df = merge_trends_batches(df, candidate, overlap_len, column,
+                                          is_hour=False, verbose=False, drop='right')
+                df = df * 100 / df.max()
+                daily_possible = [df_daily for df_daily in daily_possible if df_daily.index.max() > df.index.max()]
+    return df
+
+
+def find_min_dates_queries(list_dates: List[Tuple[datetime, datetime]], number: int) -> List[Tuple[datetime, datetime]]:
+    """
+    return the list of dates to query to form the minimum number of queries covering all dates provided
+    uses largest_dates_iterator to determine if an interval can be queried
+    :param list_dates: sorted list of tuples (begin, end) that can be queried
+    :param number: number of queries that will be used to retrieve data on the interval. Used by largest_dates_iterator
+    """
+    if len(list_dates) == 0:
+        return []
+    root = (list_dates[0][0], list_dates[-1][1])
+    if (root[1] - root[0]).days < max_query_days:
+        return [root]
+    else:
+        # construct the tree
+        class Node:
+            def __init__(self, begin, end):
+                self.begin = begin
+                self.end = end
+                largest_begin, largest_end = largest_dates_iterator(begin, end, number)
+                self.feasible = (largest_end - largest_begin).days < max_query_days
+                self.child = []
+                self.parent = []
+                self.covered = False
+
+            def __str__(self):
+                return str(self.begin.date()) + " " + str(self.end.date())
+
+            def set_covered(self):
+                self.covered = True
+                # its 2 parents are by extension also covered
+                if len(self.parent) > 0:
+                    self.parent[0].set_covered()
+                    self.parent[1].set_covered()
+
+            def add_child(self, node):
+                self.child.append(node)
+                node.parent.append(self)
+
+        def return_best_date(node: Node):
+            queue = [node]
+            dates = []
+            while queue:
+                node = queue.pop()
+                if node.feasible and not node.covered:
+                    node.set_covered()
+                    dates.append((node.begin, node.end))
+                elif not node.covered:
+                    queue.append(node.parent[0])
+                    queue.append(node.parent[1])
+            return dates
+
+        # construct the first nodes in the tree
+        list_node = {0: [Node(a, b) for a, b in list_dates]}
+        for depth in range(1, len(list_dates)):
+            # add the child
+            list_node[depth] = []
+            for node_a, node_b in zip(list_node[depth-1], list_node[depth-1][1:]):
+                node_cur = Node(node_a.begin, node_b.end)
+                list_node[depth].append(node_cur)
+                node_a.add_child(node_cur)
+                node_b.add_child(node_cur)
+        # retrieve the best interval by starting on the node at the largest depth
+        best_dates = return_best_date(list_node[len(list_dates)-1][0])
+        return best_dates
+
+
 def min_timeframes_holes(list_df, number, overlap=30):
     """
-    number: number of daily request made for the timeframes
+    OLD VERSION
+    gives the list of tuples of dates that must be queried to cover the holes between dataframes, each tuple having an
+        overlap on the dataframe provided
+    :param list_df: list of dataframe, having holes between them.
+    :param number: of daily request made for the timeframes
+    :param overlap: number of days that must be overlap between a dataframe and the date range provided
     """
     # list of tuple (begin, end) needed for the normalization
     list_interval = timeframe_normalize_clusters(list_df, overlap)
@@ -1039,15 +1452,26 @@ def min_timeframes_holes(list_df, number, overlap=30):
     return dates_query
 
 
-def collect_holes_data(topic_mid, topic_title, number, begin, end, geo, cat=0, verbose=True):
+def collect_holes_data(topic_mid: str, topic_title: str, number: int, begin: datetime, end: datetime, geo: str,
+                       cat: int = 0, verbose: bool = True) -> pd.DataFrame:
     """
-    collect the data using daily requests.
+    collect data using number daily requests and saves it to csv
+    :param topic_mid: topic code
+    :param topic_title: name of the topic
+    :param number: number of queries to do
+    :param begin: first day that the query must cover
+    :param end: last day that the query must cover
+    :param geo: geocode that must be queried
+    :param cat: category to filter
+    :param verbose: whether to print information while collecting the data or not
+    :return df_daily: data collected using n_request
     """
     dir = "../data/trends/collect_daily/"
     timeframe_included = dates_to_timeframe(begin, end).replace(" ", "-")
     filename = f"{dir}{geo}-{topic_title}-{timeframe_included}.csv"
     df_daily = mean_query(number, begin, end, topic_mid, geo=geo, cat=cat, verbose=verbose)
     df_daily.to_csv(filename)
+    return df_daily
 
 
 def scale_df(df, topic):
@@ -1087,67 +1511,80 @@ def scale_df(df, topic):
             scaled_df = merge_trends_batches(scaled_df, batch_df, overlap_hours, topic)
     list_scaled_df.append(scaled_df)
 
-    # drop the period at the beginning and the end, in order to begin from YYYY-MM-DD:0h ->
-    """
-    for i in range(len(list_scaled_df)):
-        df = list_scaled_df[i]
-        old_begin, old_end = df.index.min(), df.index.max()
-        new_begin = old_begin + datetime.timedelta(hours=((24 - old_begin.hour) % 24))
-        new_end = old_end - datetime.timedelta(hours=((old_end.hour + 1) % 24))
-        list_scaled_df[i] = df[new_begin:new_end]
-    """
     return list_scaled_df
 
 
-def correct_batch_id(topic_title, topic_code, geo):
+def correct_batch_id(topic_title: str, topic_code: str, geo: str) -> pd.DataFrame:
+    """
+    correct the batch_id of the batch collected
+    a batch_id must be negative if either
+        - the data could not be collected on the given period
+        - there is not less than 3 datapoints with value > 10
+    :param topic_title: title of the topic to look at
+    :param topic_code: code of the topic to look at
+    :param geo: geocode of the dataframe to look at
+    :return final_df: dataframe where the batch_id is set to negative if needed. This dataframe is saved in
+        data/trends/collect as a csv file
+    """
     data_dir = "../data/trends/collect"
     csv_file = f'{data_dir}/{geo}-{topic_title}.csv'
-    df = pd.read_csv(csv_file)
-    list_dates = df['date'].tolist()
-    list_batches = df['batch_id'].tolist()
-    list_trends = df[topic_code].tolist()
-    current_batch = 0
-    new_list_trends = [list_trends[0]]
-    new_list_batches = [list_batches[0]]
-    new_list_date = [list_dates[0]]
-    added_batches = 0
-    for i in range(1, len(list_dates)):
-        d1 = datetime.strptime(list_dates[i-1], "%Y-%m-%d %H:%M:%S")
-        d2 = datetime.strptime(list_dates[i], "%Y-%m-%d %H:%M:%S")
-        diff = abs((d2 - d1))
-        diff_hours = (diff.seconds/3600) + 24*diff.days
-        if diff_hours > 72:  # There is a missing batch
-            begin = datetime.strptime(list_dates[i-1], "%Y-%m-%d %H:%M:%S") + timedelta(hours=1)
-            end = datetime.strptime(list_dates[i], "%Y-%m-%d %H:%M:%S") - timedelta(hours=1)
-            date_iterator = pd.date_range(begin, end, freq='H')
-            date_iterator = date_iterator.strftime("%Y-%m-%d %H:%M:%S").tolist()
-            current_batch += 1
-            added_batches += 1
-            for date in date_iterator:
-                new_list_date.append(date)
-                new_list_trends.append(0)
-                new_list_batches.append(-current_batch)
-            current_batch += 1
-            new_list_date.append(list_dates[i])
-            new_list_batches.append(current_batch)
-            new_list_trends.append(list_trends[i])
-        else:
-            if list_batches[i-1] != list_batches[i]:
-                current_batch = list_batches[i] + added_batches
-            new_list_date.append(list_dates[i])
-            new_list_batches.append(current_batch)
-            new_list_trends.append(list_trends[i])
+    date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+    df = pd.read_csv(csv_file, parse_dates=['date'], date_parser=date_parser).set_index('date')
+    list_batches = df.batch_id.unique()
 
     final_df = pd.DataFrame()
-    final_df = pd.concat([final_df, pd.DataFrame(new_list_date)], axis=1)
-    final_df = pd.concat([final_df, pd.DataFrame(new_list_trends)], axis=1)
-    final_df = pd.concat([final_df, pd.DataFrame(new_list_batches)], axis=1)
-    final_df.columns = ["date", topic_code, "batch_id"]
-    final_df.to_csv(csv_file, index=False)
+    cur_batch_id = 0  # always positive
+    previous_df_batch = None
+    previous_batch_id = None
+
+    for i, batch_id in enumerate(list_batches):
+        df_batch = df[df['batch_id'] == batch_id]
+        # a valid batch must have at least more than 3 values above 10
+        if len(np.where(df_batch[topic_code] > 10)[0]) <= 3:
+            df_batch = df_batch.assign(batch_id=-cur_batch_id)
+            batch_id = -cur_batch_id
+        else:  # the batch is valid and must have a positive batch id
+            df_batch = df_batch.assign(batch_id=cur_batch_id)
+            batch_id = cur_batch_id
+
+        # there is a gap between this batch and the previous one and the two batches don't have a negative batch_id
+        if (i != 0 and len(previous_df_batch.index.intersection(df_batch.index)) == 0
+                and batch_id > 0 and previous_batch_id > 0):
+            min_date = previous_df_batch.index.max()
+            max_date = df_batch.index.min()
+            days = pd.date_range(min_date, max_date, freq='H')
+            data = np.zeros(len(days))
+            batch_id_vector = [-cur_batch_id for i in range(len(days))]
+            df_zero = pd.DataFrame({'date': days, topic_code: data, 'batch_id': batch_id_vector})
+            df_zero = df_zero.set_index('date')
+            cur_batch_id += 1  # count as if 2 batches were added
+            df_batch = df_zero.append(df_batch)
+
+        previous_df_batch = df_batch
+        previous_batch_id = batch_id
+        final_df = final_df.append(df_batch)
+        cur_batch_id += 1
+    final_df.to_csv(csv_file, index=True)
     return final_df
 
 
+def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str]):
+    """
+    collect daily data on the gaps on all geocodes and topics specified
+    :param geocodes: dict of geocodes to actualize
+    :param topics: dict of topics to actualize
+    """
+    for geo in geocodes:
+        for topic_title, topic_mid in topics.items():
+            print(topic_title)
+            model = daily_gap_and_model_data(geo, topic_title, topic_mid, 20, overlap=30, verbose=True)
+            plot_trends(model, topic_mid, show=False)
+            plt.title(topic_title)
+            plt.show()
+
+
 if __name__ == "__main__":
+    """
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
@@ -1156,25 +1593,9 @@ if __name__ == "__main__":
     url_hospi_france_tot = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
     actualize_hospi(url_hospi_belgium, url_hospi_france_tot, url_hospi_france_new)
     actualize_github()
+    """
 
     """
-    list_topics = {
-        'Fièvre': '/m/0cjf0',
-        'Mal de gorge': '/m/0b76bty',
-        'Dyspnée': '/m/01cdt5',
-        'Agueusie': '/m/05sfr2',
-        'Anosmie': '/m/0m7pl',
-        'Virus': '/m/0g9pc',
-        'Température corporelle humaine': '/g/1213j0cz',
-        'Épidémie': '/m/0hn9s',
-        'Symptôme': '/m/01b_06',
-        'Thermomètre': '/m/07mf1',
-        'Grippe espagnole': '/m/01c751',
-        'Paracétamol': '/m/0lbt3',
-        'Respiration': '/m/02gy9_',
-        'Toux': '/m/01b_21',
-        'Coronavirus': '/m/01cpyy'
-    }
 
     geocodes = {
         'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
@@ -1223,7 +1644,6 @@ if __name__ == "__main__":
         'Agueusie': '/m/05sfr2',
         'Anosmie': '/m/0m7pl',
         'Virus': '/m/0g9pc',
-        'Température corporelle humaine': '/g/1213j0cz',
         'Épidémie': '/m/0hn9s',
         'Symptôme': '/m/01b_06',
         'Thermomètre': '/m/07mf1',
@@ -1263,6 +1683,24 @@ if __name__ == "__main__":
     for title, mid in list_topics.items():
         collect_historical_interest(mid, title, geo='FR-T')
     """
+    list_topics = {
+        'Fièvre': '/m/0cjf0',
+        'Mal de gorge': '/m/0b76bty',
+        'Dyspnée': '/m/01cdt5',
+        'Agueusie': '/m/05sfr2',
+        'Anosmie': '/m/0m7pl',
+        'Virus': '/m/0g9pc',
+        'Épidémie': '/m/0hn9s',
+        'Symptôme': '/m/01b_06',
+        'Thermomètre': '/m/07mf1',
+        'Grippe espagnole': '/m/01c751',
+        'Paracétamol': '/m/0lbt3',
+        'Respiration': '/m/02gy9_',
+        'Toux': '/m/01b_21',
+        'Coronavirus': '/m/01cpyy'
+    }
 
+    geo = {"BE": "Belgique"}
+    collect_all_daily_gap(geo, list_topics)
 
 
