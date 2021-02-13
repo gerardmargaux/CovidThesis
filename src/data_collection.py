@@ -1157,6 +1157,9 @@ def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_da
     :param list_df_daily: list of dataframe to consider in order to find the one with the largest intersection
     :param overlap: number of overlap that should be used for the intersection
     """
+    if not list_df_daily:  # no list of daily dataframe given
+        return pd.DataFrame(), True
+
     best_inter = -1
     best_df = None
     can_be_actualized = True  # true if the largest date must be actualized
@@ -1256,7 +1259,7 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
     return complete_df
 
 
-def rescale_batch(df_left, df_right, df_daily, topic_code, overlap_max=30, rolling=3, overlap_min=3, drop=True):
+def rescale_batch(df_left, df_right, df_daily, topic_code, overlap_max=30, rolling=7, overlap_min=2, drop=True):
     """
     rescale a left and a right batch with a hole in between, covered by df_daily
     :param df_left: DataFrame on the left interval
@@ -1289,7 +1292,8 @@ def rescale_batch(df_left, df_right, df_daily, topic_code, overlap_max=30, rolli
     if len(overlap) > overlap_max:
         overlap = overlap[-overlap_max:]
     overlap_len = len(overlap)
-    daily_used[daily_used < 0.01] = 0
+    title = daily_used.columns[0]
+    daily_used.loc[daily_used[title] < 0.01, title] = 0
     # print("overlap left len", overlap_len)
     # print("left")
     # plot_trends(df_left, df_left.columns[0])
@@ -1734,7 +1738,7 @@ if __name__ == "__main__":
     }
 
     geo = {
-        'FR-P': "Normandie",
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
     }
     actualize_trends(geo, list_topics, plot=True)
 
