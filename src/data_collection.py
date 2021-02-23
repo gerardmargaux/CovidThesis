@@ -299,11 +299,12 @@ def _fetch_data(pytrends, build_payload, timeframe: str) -> pd.DataFrame:
     :param timeframe: string representing the timeframe
     :return a dataframe containing an interest over time for a particular topic
     """
-    attempts, fetched = 0, False
-    while not fetched:
+    attempts = 0
+    while True:
         try:
             build_payload(timeframe=timeframe)
-        except ResponseError as err:
+            return pytrends.interest_over_time()
+        except (ResponseError, ReadTimeout) as err:
             print(err)
             print(f'Trying again in {60 + 5 * attempts} seconds.')
             sleep(60 + 5 * attempts)
@@ -311,9 +312,6 @@ def _fetch_data(pytrends, build_payload, timeframe: str) -> pd.DataFrame:
             if attempts > 3:
                 print('Failed after 3 attemps, abort fetching.')
                 break
-        else:
-            fetched = True
-    return pytrends.interest_over_time()
 
 
 def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
@@ -1179,13 +1177,11 @@ def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_da
                 can_be_actualized = True
             else:
                 can_be_actualized = False
-    if best_df is None:  #TODO return result if empty list of dataframes
-        raise Exception("No dataframe could be found for the gap")
     return best_df, can_be_actualized
 
 
 def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number: int = 20, overlap: int = 30,
-                      verbose: bool = True) -> pd.DataFrame:
+                      verbose: bool = True, refresh: bool = True) -> pd.DataFrame:
     """
     collect the daily data on the gap where the hourly data could not be retrieved
     if the daily data is outdated or absent, it is collected and saved to a csv file
@@ -1195,6 +1191,7 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
     :param number: number of daily queries to do on the gaps
     :param overlap: number of overlapping points between a daily request and the 2 hourly requests around it
     :param verbose: whether to display information while running or not
+    :param refresh: whether to find new daily gap or use only the existing ones
     :return model dataframe
     """
     data_daily_dir = "../data/trends/collect_daily"
@@ -1207,7 +1204,7 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
     # transform the hourly data to a list of daily data
     list_df_hourly = sanitize_hourly_data(df_hourly, topic_mid)
     # collect the existing daily data
-    pattern = "([A-Z]{2}(?:-[A-Z])?)-(\D*)-(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})\.csv"
+    # pattern = "([A-Z]{2}(?:-[A-Z])?)-(\D*)-(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})\.csv"
     starting_pattern = f"{geo}-{topic_title}"
     existing_files = [filename for filename in os.listdir(data_daily_dir) if filename.startswith(starting_pattern)]
     date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d")
@@ -1221,7 +1218,7 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
     list_daily_intersection = []
     for df_a, df_b in zip(list_df_hourly, list_df_hourly[1:]):
         df_intersection, can_be_actualized = find_largest_intersection(df_a, df_b, list_daily_df, overlap=overlap)
-        if can_be_actualized:  # new data can be queried
+        if can_be_actualized and refresh:  # new data can be queried and must be refreshed
             # overlap-1 because the date is included
             dates_query = (df_a.index.max() - timedelta(days=overlap-1)).to_pydatetime(), \
                           min((df_b.index.min() + timedelta(days=overlap-1)).to_pydatetime(), latest_trends_daily_date())
@@ -1578,7 +1575,12 @@ def correct_batch_id(topic_title: str, topic_code: str, geo: str) -> pd.DataFram
     return final_df
 
 
-def actualize_trends(geocodes: Dict[str, str], topics: Dict[str, str], verbose=True, plot=False):
+def actualize_trends(geocodes: Dict[str, str],
+                     topics: Dict[str, str],
+                     verbose: bool = True,
+                     plot: bool = False,
+                     only_hourly: bool = False,
+                     refresh_daily: bool = True):
     """
     actualize the trends data in several steps:
     1) collect the hourly data
@@ -1588,35 +1590,42 @@ def actualize_trends(geocodes: Dict[str, str], topics: Dict[str, str], verbose=T
     :param topics: dict of topic_name: topic_code for trends
     :param verbose: whether to print information during the run or not
     :param plot: whether to plot the model data created or not
+    :param only_hourly: whether to only actualize the hourly data or not
+    :param refresh_daily: whether to refresh the daily data or not
     """
-    # collect the daily data
+    # collect the hourly data
     for loc in geocodes:
         for topic_name, topic_code in topics.items():
             collect_historical_interest(topic_code, topic_name, loc, verbose=verbose)
     # correct the batch id
-    for loc in geocodes:
-        for topic_name, topic_code in topics.items():
-            correct_batch_id(topic_name, topic_code, loc)
-    # collect the data on the gaps
-    collect_all_daily_gap(geocodes, topics, plot=plot, verbose=verbose)
+    if not only_hourly:
+        for loc in geocodes:
+            for topic_name, topic_code in topics.items():
+                correct_batch_id(topic_name, topic_code, loc)
+        # collect the data on the gaps
+        collect_all_daily_gap(geocodes, topics, plot=plot, verbose=verbose, refresh=refresh_daily)
 
 
-def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str], plot=False, verbose=True):
+def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str], plot=False, verbose=True, refresh=True):
     """
     collect daily data on the gaps on all geocodes and topics specified
     :param geocodes: dict of geocodes to actualize
     :param topics: dict of topics to actualize
     :param plot: whether to plot the final model data or not
     :param verbose: whether to print information during the collection of data or not
+    :param refresh: whether to refresh the daily data or not
     """
+    plot_dir = "../plot/trends"
     for geo in geocodes:
         for topic_title, topic_mid in topics.items():
             if verbose:
                 print(topic_title)
-            model = daily_gap_and_model_data(geo, topic_title, topic_mid, 20, overlap=30, verbose=verbose)
+            model = daily_gap_and_model_data(geo, topic_title, topic_mid, 20, overlap=30, verbose=verbose,
+                                             refresh=refresh)
             if plot:
                 plot_trends(model, topic_mid, show=False)
                 plt.title(topic_title)
+                plt.savefig(f"{plot_dir}/{geo}-{topic_title}", facecolor='white')
                 plt.show()
 
 
@@ -1738,7 +1747,28 @@ if __name__ == "__main__":
     }
 
     geo = {
-        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        #'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        #'FR-C': "Auvergne-Rhône-Alpes",
+        #'FR-D': "Bourgogne-Franche-Comté",
+        #'FR-E': 'Bretagne',
+        #'FR-F': 'Centre-Val de Loire',
+        #'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        #'FR-H': 'Corse',
+        #'FR-I': "Bourgogne-Franche-Comté",
+        #'FR-J': 'Ile-de-France',
+        #'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        #'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        #'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        #'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        #'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        #'FR-P': "Normandie",
+        #'FR-Q': "Normandie",
+        #'FR-R': 'Pays de la Loire',
+        #'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        #'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        #'FR-U': "Provence-Alpes-Côte d'Azur",
+        #'FR-V': "Auvergne-Rhône-Alpes",
+        #'BE': "Belgique"
     }
-    actualize_trends(geo, list_topics, plot=True)
-
+    actualize_trends(geo, list_topics, plot=True, only_hourly=False, refresh_daily=False)
