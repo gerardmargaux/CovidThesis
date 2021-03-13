@@ -24,6 +24,7 @@ import sys
 from typing import List, Iterator, Tuple, Dict
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import json
 
 
 # from src.prediction_model import *
@@ -957,13 +958,17 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
             df.to_csv(csv_file)
 '''
 
-def actualize_hospi(url_hospi_belgium, url_hospi_france_tot, url_hospi_france_new):
-    # Get hospi for Belgium
+def actualize_hospi():
+    url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
+    url_hospi_france_new = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
+    url_hospi_france_tot = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
+    url_hospi_world = "https://covid.ourworldindata.org/data/owid-covid-data.csv"
+    # hospi in belgium
     encoded_path_be = requests.get(url_hospi_belgium).content
     df_hospi_be = pd.read_csv(io.StringIO(encoded_path_be.decode("utf-8"))).drop(axis=1, columns='Unnamed: 0')
-    df_hospi_be.to_csv('../data/hospi/be-covid-hospi.csv', index=True)
+    df_hospi_be.to_csv('../data/hospi/be-covid-hospi.csv', index=False)
 
-    # Get total number of hospi for France
+    # hospi in France
     encoded_path_fr = requests.get(url_hospi_france_tot).content
     df_hospi_fr = pd.read_csv(io.StringIO(encoded_path_fr.decode("utf-8")))
     df_hospi_fr = df_hospi_fr.rename(columns=lambda s: s.replace('"', ''))
@@ -971,13 +976,24 @@ def actualize_hospi(url_hospi_belgium, url_hospi_france_tot, url_hospi_france_ne
         df_hospi_fr.iloc[:, i] = df_hospi_fr.iloc[:, i].str.replace('"', '')
     df_hospi_fr.to_csv('../data/hospi/fr-covid-hospi-total.csv', index=False)
 
-    # Get total number of hospi for France
+    # new hospi in France
     encoded_path_fr_new = requests.get(url_hospi_france_new).content
     df_hospi_fr_new = pd.read_csv(io.StringIO(encoded_path_fr_new.decode("utf-8")))
     df_hospi_fr_new = df_hospi_fr_new.rename(columns=lambda s: s.replace('"', ''))
     for i, col in enumerate(df_hospi_fr_new.columns):
         df_hospi_fr_new.iloc[:, i] = df_hospi_fr_new.iloc[:, i].str.replace('"', '')
     df_hospi_fr_new.to_csv('../data/hospi/fr-covid-hospi.csv', index=False)
+
+    # hospi in the world
+    encoded_path_world = requests.get(url_hospi_world).content
+    df_world = pd.read_csv(io.StringIO(encoded_path_world.decode("utf-8")))
+    df_world = df_world[['iso_code', 'location', 'date', 'icu_patients', 'hosp_patients', 'population']]
+    df_world.drop('population').to_csv('../data/hospi/world.csv', index=False)
+
+    # also write the world population
+    pop = df_world.groupby("iso_code").agg("population").mean().to_dict()
+    with open("data/population.txt", "w") as file:
+        file.write(json.dumps(pop))
     return
 
 
@@ -1619,12 +1635,12 @@ def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str], plot
     for geo in geocodes:
         for topic_title, topic_mid in topics.items():
             if verbose:
-                print(topic_title)
+                print(f"{geo}: {topic_title}")
             model = daily_gap_and_model_data(geo, topic_title, topic_mid, 20, overlap=30, verbose=verbose,
                                              refresh=refresh)
             if plot:
                 plot_trends(model, topic_mid, show=False)
-                plt.title(topic_title)
+                plt.title(f"{geo}: {topic_title}")
                 plt.savefig(f"{plot_dir}/{geo}-{topic_title}", facecolor='white')
                 plt.show()
 
@@ -1634,10 +1650,7 @@ if __name__ == "__main__":
     #actualize_trends(extract_topics(), start_month=3)
     #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
     #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-    url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
-    url_hospi_france_new = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
-    url_hospi_france_tot = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
-    actualize_hospi(url_hospi_belgium, url_hospi_france_tot, url_hospi_france_new)
+    actualize_hospi()
     actualize_github()
     """
 
@@ -1748,27 +1761,28 @@ if __name__ == "__main__":
 
     geo = {
         'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-        #'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-        #'FR-C': "Auvergne-Rhône-Alpes",
-        #'FR-D': "Bourgogne-Franche-Comté",
-        #'FR-E': 'Bretagne',
-        #'FR-F': 'Centre-Val de Loire',
-        #'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-        #'FR-H': 'Corse',
-        #'FR-I': "Bourgogne-Franche-Comté",
-        #'FR-J': 'Ile-de-France',
-        #'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-        #'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-        #'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-        #'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-        #'FR-O': 'Nord-Pas-de-Calais-Picardie',
-        #'FR-P': "Normandie",
-        #'FR-Q': "Normandie",
-        #'FR-R': 'Pays de la Loire',
-        #'FR-S': 'Nord-Pas-de-Calais-Picardie',
-        #'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
-        #'FR-U': "Provence-Alpes-Côte d'Azur",
-        #'FR-V': "Auvergne-Rhône-Alpes",
-        #'BE': "Belgique"
+        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-C': "Auvergne-Rhône-Alpes",
+        'FR-D': "Bourgogne-Franche-Comté",
+        'FR-E': 'Bretagne',
+        'FR-F': 'Centre-Val de Loire',
+        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-H': 'Corse',
+        'FR-I': "Bourgogne-Franche-Comté",
+        'FR-J': 'Ile-de-France',
+        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        'FR-P': "Normandie",
+        'FR-Q': "Normandie",
+        'FR-R': 'Pays de la Loire',
+        'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-U': "Provence-Alpes-Côte d'Azur",
+        'FR-V': "Auvergne-Rhône-Alpes",
+        'BE': "Belgique"
     }
-    actualize_trends(geo, list_topics, plot=True, only_hourly=False, refresh_daily=False)
+    #actualize_trends(geo, list_topics, plot=True, only_hourly=False, refresh_daily=False)
+    actualize_hospi()
