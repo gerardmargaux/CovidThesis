@@ -4,7 +4,6 @@ from typing import List, Tuple
 import pycountry
 import numpy as np
 
-
 european_geocodes = {
     'AT': 'Austria',
     'BE': 'Belgium',
@@ -17,6 +16,7 @@ european_geocodes = {
     'ES': 'Spain',
     'FI': 'Finland',
     'FR': 'France',
+    'GB': 'Great Britain',
     'GR': 'Greece',
     'HR': 'Croatia',
     'HU': 'Hungary',
@@ -32,9 +32,9 @@ european_geocodes = {
     'PL': 'Poland',
     'PT': 'Portugal',
     'RO': 'Romania',
-    'SE': 'Sweden',
-    'SI': 'Slovenia',
-    'SK': 'Slovakia',
+    #'SE': 'Sweden',
+    #'SI': 'Slovenia',
+    #'SK': 'Slovakia',
 }
 
 french_region_and_be = {

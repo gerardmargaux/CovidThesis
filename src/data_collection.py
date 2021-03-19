@@ -25,6 +25,8 @@ from typing import List, Iterator, Tuple, Dict
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import json
+import util
+from copy import deepcopy
 
 
 # from src.prediction_model import *
@@ -38,6 +40,14 @@ google_geocodes = {
 }
 
 ua = UserAgent()
+
+
+def date_parser_daily(x):
+    return datetime.strptime(x, "%Y-%m-%d")
+
+
+def date_parser_hourly(x):
+    return datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
 
 
 def latest_trends_daily_date():
@@ -385,20 +395,23 @@ def merge_trends_batches(left, right, overlap_time, topic, is_hour=True, verbose
         if drop == 'left':
             left_to_keep = left[left.index < overlap_start]
             right_to_add = right * scaling
-            return left_to_keep.append(right_to_add)
+            scaled = left_to_keep.append(right_to_add)
         else:
             right_to_add = right[right.index > overlap_end]
             right_to_add = right_to_add * scaling
-            return left.append(right_to_add)
+            scaled = left.append(right_to_add)
     else:  # left has not the good scale
         if drop == 'right':
             right_to_keep = right[right.index > overlap_end]
             left_to_add = left / scaling
-            return left_to_add.append(right_to_keep)
+            scaled = left_to_add.append(right_to_keep)
         else:
             left_to_add = left[left.index < overlap_start]
             left_to_add = left_to_add / scaling
-            return left_to_add.append(right)
+            scaled = left_to_add.append(right)
+    if np.any(scaled.index.duplicated()):
+        print("ho")
+    return scaled
 
 
 def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begin_tot: datetime = None,
@@ -988,11 +1001,11 @@ def actualize_hospi():
     encoded_path_world = requests.get(url_hospi_world).content
     df_world = pd.read_csv(io.StringIO(encoded_path_world.decode("utf-8")))
     df_world = df_world[['iso_code', 'location', 'date', 'icu_patients', 'hosp_patients', 'population']]
-    df_world.drop('population').to_csv('../data/hospi/world.csv', index=False)
+    df_world.drop(columns=['population']).to_csv('../data/hospi/world.csv', index=False)
 
     # also write the world population
     pop = df_world.groupby("iso_code").agg("population").mean().to_dict()
-    with open("data/population.txt", "w") as file:
+    with open("../data/population.txt", "w") as file:
         file.write(json.dumps(pop))
     return
 
@@ -1063,7 +1076,7 @@ def dates_iterator(begin: datetime, end: datetime, number: int) -> Iterator[Tupl
         lag_right += 1
 
 
-def mean_query(number, begin, end, topic, geo, cat=0, verbose=True):
+def mean_query(number: int, begin: datetime, end: datetime, topic: str, geo: str, cat=0, verbose=True):
     """
     provide multiple queries on the period begin->end. the column topic contains the mean of the queries
     the queries use different interval in order to provide different results
@@ -1210,7 +1223,7 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
     :param refresh: whether to find new daily gap or use only the existing ones
     :return model dataframe
     """
-    data_daily_dir = "../data/trends/collect_daily"
+    data_daily_dir = "../data/trends/collect_gap"
     data_hourly_dir = "../data/trends/collect"
     data_model_dir = "../data/trends/model"
     # retrieve the hourly data
@@ -1221,7 +1234,7 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
     list_df_hourly = sanitize_hourly_data(df_hourly, topic_mid)
     # collect the existing daily data
     # pattern = "([A-Z]{2}(?:-[A-Z])?)-(\D*)-(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})\.csv"
-    starting_pattern = f"{geo}-{topic_title}"
+    starting_pattern = f"{geo}-{topic_title}-"
     existing_files = [filename for filename in os.listdir(data_daily_dir) if filename.startswith(starting_pattern)]
     date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d")
     list_daily_df = [pd.read_csv(f"{data_daily_dir}/{file}", parse_dates=['date'],
@@ -1487,7 +1500,7 @@ def collect_holes_data(topic_mid: str, topic_title: str, number: int, begin: dat
     :param verbose: whether to print information while collecting the data or not
     :return df_daily: data collected using n_request
     """
-    dir = "../data/trends/collect_daily/"
+    dir = "../data/trends/collect_gap/"
     timeframe_included = dates_to_timeframe(begin, end).replace(" ", "-")
     filename = f"{dir}{geo}-{topic_title}-{timeframe_included}.csv"
     df_daily = mean_query(number, begin, end, topic_mid, geo=geo, cat=cat, verbose=verbose)
@@ -1620,6 +1633,110 @@ def actualize_trends(geocodes: Dict[str, str],
                 correct_batch_id(topic_name, topic_code, loc)
         # collect the data on the gaps
         collect_all_daily_gap(geocodes, topics, plot=plot, verbose=verbose, refresh=refresh_daily)
+
+
+def actualize_trends_using_daily(geocodes: Dict[str, str],
+                                 topics: Dict[str, str],
+                                 verbose: bool = True,
+                                 plot: bool = False,
+                                 nb_mean: int = 10,
+                                 overlap: int = 30,
+                                 begin: datetime = None,
+                                 refresh: bool = True):
+    """
+    actualize trends data using only daily requests and save it to the data/trends/model directory
+    :param geocodes: dict of localizations
+    :param topics: dict of topic_name: topic_code for trends
+    :param verbose: whether to print information during the run or not
+    :param plot: whether to plot the model data created or not
+    :param overlap: number of days that must be overlapping
+    :param nb_mean: number of mean requests to do to actualize the daily data
+    :param refresh: whether to actually refresh the data or not. If False, generates model data based on the existing
+        saved trends
+    :param begin: first date where data is needed
+    """
+    if begin is None:
+        begin = datetime.strptime("2020-01-01", "%Y-%m-%d")
+    dir_daily = "../data/trends/collect_daily/"
+    dir_model = "../data/trends/model/"
+    plot_dir = "../plot/trends/"
+    for loc in geocodes:
+        for topic_name, topic_code in topics.items():
+            filename = f"{dir_daily}{loc}-{topic_name}.csv"
+            max_lag = np.floor(np.sqrt(nb_mean - 1))  # max lag used by dates iterator if every date can be queried
+            length = max_query_days - 2 * max_lag  # length of the queries that will be done
+            latest_day = latest_trends_daily_date()
+            is_updated = False
+            # load the saved csv file if it exist:
+            if os.path.exists(filename):
+                df_tot = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index('date')
+                # retrieve the dates already covered
+                gb = df_tot.groupby("batch_id")
+                df = gb.get_group(len(gb.size())-1)
+                begin_covered = df.index.min().to_pydatetime()
+                end_covered = df_tot.index.max().to_pydatetime()
+                if end_covered == latest_day or not refresh:  # no need to update the file
+                    is_updated = True
+                else:
+                    if (end_covered - begin_covered).days != length:  # the last batch registered was not the longest one
+                        # remove the last batch as a longer can be queried
+                        batch_id = df.iloc[0]["batch_id"]
+                        df_tot = df_tot.loc[df_tot["batch_id"] != batch_id]
+                        cur_begin = begin_covered
+                        cur_end = cur_begin + timedelta(days=length)
+                    else:  # the last batch was the best one that could be queried
+                        batch_id = df_tot.iloc[-1]["batch_id"]
+                        cur_begin = begin_covered + timedelta(days=(length - overlap))
+                        cur_end = end_covered + timedelta(days=(length - overlap))
+            else:  # no data existed previously
+                if not refresh:  # cannot perform new queries if refresh == False
+                    continue
+                cur_begin = deepcopy(begin)
+                cur_end = cur_begin + timedelta(days=length)
+                df_tot = pd.DataFrame()
+                batch_id = 0
+            if not is_updated:
+                list_dates = []
+                last_length = max_query_days - overlap - nb_mean
+
+                while cur_end < latest_day:
+                    list_dates.append((cur_begin, cur_end))
+                    cur_begin += timedelta(days=(length - overlap))
+                    cur_end += timedelta(days=(length - overlap))
+
+                cur_end = latest_day
+                if (cur_end - cur_begin).days <= last_length:  # the last query can be done safely
+                    list_dates.append((cur_begin, cur_end))
+                else:  # need to split the last query into 2 sets of queries
+                    cur_end = cur_begin + timedelta(max_query_days - nb_mean)
+                    list_dates.append((cur_begin, cur_end))
+                    cur_begin += timedelta(days=(length - overlap))
+                    cur_end = latest_day
+                    list_dates.append((cur_begin, cur_end))
+
+                # send the queries
+                for i, (date_from, date_to) in enumerate(list_dates):
+                    if verbose:
+                        print(f"{loc}-{topic_name}: retrieving batch {i+1}/{len(list_dates)} ")
+                    df = mean_query(nb_mean, date_from, date_to, topic_code, loc, verbose=verbose)
+                    df["batch_id"] = batch_id
+                    df_tot = df_tot.append(df)
+                    df_tot.to_csv(filename)
+                    if verbose:
+                        print(f"daily requests saved to {filename}")
+                    batch_id += 1
+            # construct the model data
+            gb = df_tot.groupby("batch_id")
+            list_df = [gb.get_group(x)[[topic_code]] for x in gb.groups]
+            model = list_df[0]
+            for df in list_df[1:]:
+                model = merge_trends_batches(model, df, overlap + 1, topic_code, is_hour=False, verbose=False)
+            model.to_csv(f"{dir_model}{loc}-{topic_name}.csv")
+            if plot:
+                plot_trends(model, topic_code, show=False)
+                plt.title(f"{loc}: {topic_name}")
+                plt.savefig(f"{plot_dir}{loc}-{topic_name}", facecolor='white')
+                plt.show()
 
 
 def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str], plot=False, verbose=True, refresh=True):
@@ -1785,4 +1902,5 @@ if __name__ == "__main__":
         'BE': "Belgique"
     }
     #actualize_trends(geo, list_topics, plot=True, only_hourly=False, refresh_daily=False)
-    actualize_hospi()
+    #actualize_hospi()
+    actualize_trends_using_daily(util.european_geocodes, list_topics, plot=True, refresh=False)
