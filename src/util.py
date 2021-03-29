@@ -32,9 +32,9 @@ european_geocodes = {
     'PL': 'Poland',
     'PT': 'Portugal',
     'RO': 'Romania',
-    #'SE': 'Sweden',
-    #'SI': 'Slovenia',
-    #'SK': 'Slovakia',
+    'SE': 'Sweden',
+    'SI': 'Slovenia',
+    'SK': 'Slovakia',
 }
 
 french_region_and_be = {

@@ -1901,6 +1901,6 @@ if __name__ == "__main__":
         'FR-V': "Auvergne-Rhône-Alpes",
         'BE': "Belgique"
     }
-    #actualize_trends(geo, list_topics, plot=True, only_hourly=False, refresh_daily=False)
-    #actualize_hospi()
-    actualize_trends_using_daily(util.european_geocodes, list_topics, plot=True, refresh=False)
+    #actualize_trends(geo, list_topics, plot=True, only_hourly=True, refresh_daily=False)
+    actualize_hospi()
+    actualize_trends_using_daily(util.european_geocodes, list_topics, plot=False, refresh=True)
