@@ -11,7 +11,6 @@ from pytrends.dailydata import get_daily_data
 import os.path
 from os import listdir
 from datetime import date, datetime, timedelta
-from my_fake_useragent import UserAgent
 import random
 import io
 import requests
@@ -28,19 +27,11 @@ import json
 import util
 from copy import deepcopy
 
-
 # from src.prediction_model import *
 
 # maximum number of days that can be queried before getting a request sampled by week, including the first and last day
 # (2020-01-01 -> 2020-01-02 cover 2 days)
 max_query_days = 270
-
-google_geocodes = {
-    'BE': "Belgique"
-}
-
-ua = UserAgent()
-
 
 def date_parser_daily(x):
     return datetime.strptime(x, "%Y-%m-%d")
@@ -362,7 +353,6 @@ def _fetch_related(pytrends, build_payload, timeframe: str, term) -> dict:
 def merge_trends_batches(left, right, overlap_time, topic, is_hour=True, verbose=False, drop=None):
     """
     return the concatenation of left and right, correctly scaled based on their overlap (in hours or days)
-
     :param left: accumulator dataframe
     :param right: new dataframe to add to the accumulator
     :param overlap_time: number of time points that are overlapping
@@ -418,7 +408,6 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
                                 end_tot: datetime = None, overlap_hour: int = 15, verbose: bool = True) -> pd.DataFrame:
     """
     load collect and save hourly trends data for a given topic over a certain region
-
     :param topic_mid: mid code
     :param topic_title: title of the topic
     :param geo: google geocode
@@ -426,7 +415,6 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
     :param end_tot: end date. If None, default to today
     :param overlap_hour: number of overlapping point
     :param verbose: whether to print information while the code is running or not
-
     :return dataframe of collected data
     """
     dir = "../data/trends/collect/"
@@ -449,7 +437,7 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
         if len(df_tot.loc[df_tot[batch_column] == max_batch]) < 192:  # if the last batch was not done on a whole week
             df_tot = df_tot.loc[df_tot[batch_column] < max_batch]  # drop the last batch
         i = df_tot[batch_column].max() + 1  # id of the next batch
-        begin_tot = df_tot.index.max() - timedelta(hours=(overlap_hour-1))
+        begin_tot = df_tot.index.max() - timedelta(hours=(overlap_hour - 1))
     else:
         df_tot = pd.DataFrame()
         if begin_tot is None:
@@ -463,7 +451,7 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
         if end_cur - begin_cur < min_delta:  # must have a length of min 3 days
             begin_cur = end_cur - min_delta
 
-    delta = timedelta(days=7, hours=23) - timedelta(hours=(overlap_hour-1))  # diff between 2 batches
+    delta = timedelta(days=7, hours=23) - timedelta(hours=(overlap_hour - 1))  # diff between 2 batches
     delay = 0
     trials = 0
     finished = False
@@ -475,12 +463,13 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
             sleep(delay + random.random())
             if verbose:
                 print(f"downloading {timeframe} ... ", end="")
-            agent = ua.random()
             pytrends = TrendReq(hl="fr-BE")
             pytrends.build_payload([topic_mid], geo=geo, timeframe=timeframe, cat=0)
             df = pytrends.interest_over_time()
             if df.empty:
-                df = pd.DataFrame(data={'date': pd.date_range(start=begin_cur, end=end_cur, freq='H'), topic_mid: 0}).set_index('date')
+                df = pd.DataFrame(
+                    data={'date': pd.date_range(start=begin_cur, end=end_cur, freq='H'), topic_mid: 0}).set_index(
+                    'date')
                 df[batch_column] = -i
             else:
                 df.drop(columns=['isPartial'], inplace=True)
@@ -538,7 +527,8 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
                     else:  # not end of date, increment
                         end_cur = end_cur + delta
                 if verbose:
-                    print(f"Error when downloading (ResponseError). Retrying after sleeping during {delay} sec ... Trial : {trials}")
+                    print(
+                        f"Error when downloading (ResponseError). Retrying after sleeping during {delay} sec ... Trial : {trials}")
         except ReadTimeout:
             trials += 1
             delay = 60
@@ -559,17 +549,16 @@ def collect_historical_interest(topic_mid: str, topic_title: str, geo: str, begi
                 else:  # not end of date, increment
                     end_cur = end_cur + delta
             if verbose:
-                print(f"Error when downloading (ReadTimeout). Retrying after sleeping during {delay} sec ... Trial : {trials}")
+                print(
+                    f"Error when downloading (ReadTimeout). Retrying after sleeping during {delay} sec ... Trial : {trials}")
     return df_tot
 
 
 def get_historical_interest_normalized(topic, date_begin, date_end, geo, overlap_hour=1, verbose=True, sleep_fun=None):
     """
     return the historical data for a topic, hour by hour, on the given interval.
-
     the normalization is performed based on overlap_hour common data points, in order ot have only one value of 100 on
     the final dataframe
-
     :param topic: topic to query
     :param date_begin: first date to search
     :param date_end: last date to search
@@ -689,7 +678,7 @@ def get_daily_data(word: str, start_year: int, start_mon: int, stop_year: int, s
 
     else:
         complete = _fetch_data(pytrends, build_payload,
-                              dates_to_timeframe(start_date, stop_date))
+                               dates_to_timeframe(start_date, stop_date))
 
     """ dataframe contains
     - word_unscaled: data with a top 0-100 monthly
@@ -773,17 +762,17 @@ def create_dataframe_belgium(hospi_belgium='../data/hospi/be-covid-hospi.csv'):
     list_hospi = data_be['HOSP']
     new_list_hospi = [0]
     for i in range(1, len(list_hospi)):
-        diff = list_hospi[i] - list_hospi[i-1]
+        diff = list_hospi[i] - list_hospi[i - 1]
         if diff == 0 or list_hospi[i] == 0:
             new_list_hospi.append(0)
         else:
-            if list_hospi[i-1] == 0 and list_hospi[i] != 0:
+            if list_hospi[i - 1] == 0 and list_hospi[i] != 0:
                 new_list_hospi.append(1.0)
             else:
-                diff = diff / list_hospi[i-1]
+                diff = diff / list_hospi[i - 1]
                 new_list_hospi.append(diff)
     # Normalization between 0 and 1
-    new_list_hospi = [(x-min(new_list_hospi))/(max(new_list_hospi)-min(new_list_hospi)) for x in new_list_hospi]
+    new_list_hospi = [(x - min(new_list_hospi)) / (max(new_list_hospi) - min(new_list_hospi)) for x in new_list_hospi]
     data_be['HOSP'] = new_list_hospi
     print(data_be)
     return data_be
@@ -879,10 +868,10 @@ def google_trends_process(full_data, terms, start_year, start_mon, stop_year, st
     url_trends = "https://raw.githubusercontent.com/gerardmargaux/CovidThesis/master/data/trends/model/"
     all_google_data = {idx: pd.concat([load_term(key, val, dir=url_trends, geo=idx, start_year=start_year,
                                                  start_mon=start_mon, stop_year=stop_year, stop_mon=stop_mon) for
-                                       key, val in terms.items()], axis=1) for idx in google_geocodes}
+                                       key, val in terms.items()], axis=1) for idx in geo}
 
     for loc in all_google_data:
-        all_google_data[loc]["LOC"] = google_geocodes[loc]
+        all_google_data[loc]["LOC"] = geo[loc]
         all_google_data[loc] = all_google_data[loc].reset_index().rename(columns={"index": "DATE", 'date': 'DATE'})
 
     all_google_data = pd.concat(all_google_data.values())
@@ -941,7 +930,6 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
         'FR-V': "Auvergne-Rhône-Alpes",
         'BE': "Belgique"
     }
-
     today = date.today()  # take the latest data
     stop_year = today.year
     stop_month = today.month
@@ -970,6 +958,7 @@ def actualize_trends(keywords: dict, verbose=True, start_year=2020, start_month=
             df.drop(columns=['isPartial'], inplace=True)
             df.to_csv(csv_file)
 '''
+
 
 def actualize_hospi():
     url_hospi_belgium = "https://raw.githubusercontent.com/pschaus/covidbe-opendata/master/static/csv/be-covid-hospi.csv"
@@ -1066,7 +1055,7 @@ def dates_iterator(begin: datetime, end: datetime, number: int) -> Iterator[Tupl
 
         wanted_end = end + timedelta(days=lag_right)
         if wanted_end <= max_end:
-            j = lag_left-1
+            j = lag_left - 1
             while number_given < number and j >= 0:
                 number_given += 1
                 yield begin - timedelta(days=j), wanted_end
@@ -1084,7 +1073,7 @@ def mean_query(number: int, begin: datetime, end: datetime, topic: str, geo: str
     df_tot = pd.DataFrame()
     cnt = 0
     pytrends = TrendReq(retries=2, backoff_factor=0.1)
-
+    print(begin, end)
     for k, (begin_tmp, end_tmp) in enumerate(dates_iterator(begin, end, number)):
         timeframe = dates_to_timeframe(begin_tmp, end_tmp)
         # Initialize build_payload with the word we need data for
@@ -1175,7 +1164,8 @@ def sanitize_hourly_data(df: pd.DataFrame, topic_code: str) -> List[pd.DataFrame
     return list_df_hourly
 
 
-def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_daily: List[pd.DataFrame], overlap: int = 30)\
+def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_daily: List[pd.DataFrame],
+                              overlap: int = 30) \
         -> Tuple[pd.DataFrame, bool]:
     """
     find daily dataframe with the largest intersection on df_a and df_b
@@ -1210,7 +1200,7 @@ def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_da
 
 
 def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number: int = 20, overlap: int = 30,
-                      verbose: bool = True, refresh: bool = True) -> pd.DataFrame:
+                             verbose: bool = True, refresh: bool = True) -> pd.DataFrame:
     """
     collect the daily data on the gap where the hourly data could not be retrieved
     if the daily data is outdated or absent, it is collected and saved to a csv file
@@ -1241,7 +1231,8 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
                                  date_parser=date_parser).set_index('date')[[topic_mid]] for file in existing_files]
     if verbose:
         for i, df in enumerate(list_df_hourly):
-            print(f"hourly agg data: cluster {i}: {df.index.min().to_pydatetime().date()} -> {df.index.max().to_pydatetime().date()}")
+            print(
+                f"hourly agg data: cluster {i}: {df.index.min().to_pydatetime().date()} -> {df.index.max().to_pydatetime().date()}")
     # check if the gaps can be covered with the existing daily requests saved
     list_dates_actualize = []
     list_daily_intersection = []
@@ -1249,8 +1240,9 @@ def daily_gap_and_model_data(geo: str, topic_title: str, topic_mid: str, number:
         df_intersection, can_be_actualized = find_largest_intersection(df_a, df_b, list_daily_df, overlap=overlap)
         if can_be_actualized and refresh:  # new data can be queried and must be refreshed
             # overlap-1 because the date is included
-            dates_query = (df_a.index.max() - timedelta(days=overlap-1)).to_pydatetime(), \
-                          min((df_b.index.min() + timedelta(days=overlap-1)).to_pydatetime(), latest_trends_daily_date())
+            dates_query = (df_a.index.max() - timedelta(days=overlap - 1)).to_pydatetime(), \
+                          min((df_b.index.min() + timedelta(days=overlap - 1)).to_pydatetime(),
+                              latest_trends_daily_date())
             list_dates_actualize.append(dates_query)
         else:  # the query respect the expected overlap
             list_daily_intersection.append(df_intersection)
@@ -1436,13 +1428,13 @@ def find_min_dates_queries(list_dates: List[Tuple[datetime, datetime]], number: 
         for depth in range(1, len(list_dates)):
             # add the child
             list_node[depth] = []
-            for node_a, node_b in zip(list_node[depth-1], list_node[depth-1][1:]):
+            for node_a, node_b in zip(list_node[depth - 1], list_node[depth - 1][1:]):
                 node_cur = Node(node_a.begin, node_b.end)
                 list_node[depth].append(node_cur)
                 node_a.add_child(node_cur)
                 node_b.add_child(node_cur)
         # retrieve the best interval by starting on the node at the largest depth
-        best_dates = return_best_date(list_node[len(list_dates)-1][0])
+        best_dates = return_best_date(list_node[len(list_dates) - 1][0])
         return best_dates
 
 
@@ -1462,7 +1454,7 @@ def min_timeframes_holes(list_df, number, overlap=30):
     max_day = timedelta(days=200)
     list_query = [list(dates_iterator(begin, end, number)) for begin, end in list_interval]
     dates_query = []
-    max_iter = len(list_query)-2
+    max_iter = len(list_query) - 2
     skip_next = False
 
     for i, (list_date_left, list_date_right) in enumerate(zip(list_query, list_query[1:])):
@@ -1672,7 +1664,7 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 df_tot = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index('date')
                 # retrieve the dates already covered
                 gb = df_tot.groupby("batch_id")
-                df = gb.get_group(len(gb.size())-1)
+                df = gb.get_group(len(gb.size()) - 1)
                 begin_covered = df.index.min().to_pydatetime()
                 end_covered = df_tot.index.max().to_pydatetime()
                 if end_covered == latest_day or not refresh:  # no need to update the file
@@ -1708,16 +1700,18 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 if (cur_end - cur_begin).days <= last_length:  # the last query can be done safely
                     list_dates.append((cur_begin, cur_end))
                 else:  # need to split the last query into 2 sets of queries
-                    cur_end = cur_begin + timedelta(max_query_days - nb_mean)
+                    if cur_begin + timedelta(max_query_days - nb_mean) <= latest_day:
+                        cur_end = cur_begin + timedelta(max_query_days - nb_mean)
                     list_dates.append((cur_begin, cur_end))
                     cur_begin += timedelta(days=(length - overlap))
                     cur_end = latest_day
-                    list_dates.append((cur_begin, cur_end))
+                    if cur_begin < cur_end:
+                        list_dates.append((cur_begin, cur_end))
 
                 # send the queries
                 for i, (date_from, date_to) in enumerate(list_dates):
                     if verbose:
-                        print(f"{loc}-{topic_name}: retrieving batch {i+1}/{len(list_dates)} ")
+                        print(f"{loc}-{topic_name}: retrieving batch {i + 1}/{len(list_dates)} ")
                     df = mean_query(nb_mean, date_from, date_to, topic_code, loc, verbose=verbose)
                     df["batch_id"] = batch_id
                     df_tot = df_tot.append(df)
@@ -1763,144 +1757,51 @@ def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str], plot
 
 
 if __name__ == "__main__":
-    """
-    #actualize_trends(extract_topics(), start_month=3)
-    #unscaled, scaled = get_historical_interest_normalized('/m/0cjf0', "2020-02-01", "2020-10-28", geo='BE',
-    #                                                      sleep_fun=lambda: 60 + 10 * random.random())
-    actualize_hospi()
-    actualize_github()
-    """
 
-    """
-
-    geocodes = {
-        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-C': "Auvergne-Rhône-Alpes",
-        'FR-P': "Normandie",
-        'FR-D': "Bourgogne-Franche-Comté",
-        'FR-E': 'Bretagne',
-        'FR-F': 'Centre-Val de Loire',
-        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-H': 'Corse',
-        'FR-I': "Bourgogne-Franche-Comté",
-        'FR-Q': "Normandie",
-        'FR-J': 'Ile-de-France',
-        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-O': 'Nord-Pas-de-Calais-Picardie',
-        'FR-R': 'Pays de la Loire',
-        'FR-S': 'Nord-Pas-de-Calais-Picardie',
-        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-U': "Provence-Alpes-Côte d'Azur",
-        'FR-V': "Auvergne-Rhône-Alpes",
-        'BE': "Belgique"
-    }
-
-    data_hourly_dir = "../data/trends/collect"
-    date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
-
-    for geo, geo_name in geocodes.items():
-        df_hourly = {name: pd.read_csv(f"{data_hourly_dir}/{geo}-{name}.csv", parse_dates=['date'],
-                                       date_parser=date_parser).set_index('date') for name in list_topics}
-        for topic_title, topic_code in list_topics.items():
-            print(f" ----- {geo}:{topic_title} -----")
-            scaled_df = scale_df(df_hourly[topic_title], topic_code)
-            list_timeframe = min_timeframes_holes(scaled_df, 20)
-            for begin, end in list_timeframe:
-                collect_holes_data(topic_code, topic_title, 20, begin, end, geo, verbose=True)
-
-    
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
-        'Dyspnée': '/m/01cdt5',
-        'Agueusie': '/m/05sfr2',
-        'Anosmie': '/m/0m7pl',
-        'Virus': '/m/0g9pc',
-        'Épidémie': '/m/0hn9s',
+        # 'Dyspnée': '/m/01cdt5',
+        # 'Agueusie': '/m/05sfr2',
+        # 'Anosmie': '/m/0m7pl',
+        # 'Virus': '/m/0g9pc',
+        # 'Épidémie': '/m/0hn9s',
         'Symptôme': '/m/01b_06',
-        'Thermomètre': '/m/07mf1',
-        'Grippe espagnole': '/m/01c751',
-        'Paracétamol': '/m/0lbt3',
-        'Respiration': '/m/02gy9_',
-        'Toux': '/m/01b_21',
-        'Coronavirus': '/m/01cpyy'
+        # 'Thermomètre': '/m/07mf1',
+        # 'Grippe espagnole': '/m/01c751',
+        # 'Paracétamol': '/m/0lbt3',
+        # 'Respiration': '/m/02gy9_',
+        # 'Toux': '/m/01b_21',
+        # 'Coronavirus': '/m/01cpyy'
     }
 
-    geocodes = {
-        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-C': "Auvergne-Rhône-Alpes",
-        'FR-D': "Bourgogne-Franche-Comté",
-        'FR-E': 'Bretagne',
-        'FR-F': 'Centre-Val de Loire',
-        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-H': 'Corse',
-        'FR-I': "Bourgogne-Franche-Comté",
-        'FR-J': 'Ile-de-France',
-        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-O': 'Nord-Pas-de-Calais-Picardie',
-        'FR-P': "Normandie",
-        'FR-Q': "Normandie",
-        'FR-R': 'Pays de la Loire',
-        'FR-S': 'Nord-Pas-de-Calais-Picardie',
-        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-U': "Provence-Alpes-Côte d'Azur",
-        'FR-V': "Auvergne-Rhône-Alpes",
-        'BE': "Belgique"
-    }
-
-    for title, mid in list_topics.items():
-        collect_historical_interest(mid, title, geo='FR-T')
-    """
-    list_topics = {
-        'Fièvre': '/m/0cjf0',
-        'Mal de gorge': '/m/0b76bty',
-        #'Dyspnée': '/m/01cdt5',
-        #'Agueusie': '/m/05sfr2',
-        #'Anosmie': '/m/0m7pl',
-        #'Virus': '/m/0g9pc',
-        #'Épidémie': '/m/0hn9s',
-        'Symptôme': '/m/01b_06',
-        #'Thermomètre': '/m/07mf1',
-        #'Grippe espagnole': '/m/01c751',
-        #'Paracétamol': '/m/0lbt3',
-        #'Respiration': '/m/02gy9_',
-        #'Toux': '/m/01b_21',
-        #'Coronavirus': '/m/01cpyy'
-    }
+    """'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+            'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+            'FR-C': "Auvergne-Rhône-Alpes",
+            'FR-D': "Bourgogne-Franche-Comté",
+            'FR-E': 'Bretagne',
+            'FR-F': 'Centre-Val de Loire',
+            'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+            'FR-H': 'Corse',
+            'FR-I': "Bourgogne-Franche-Comté",
+            'FR-J': 'Ile-de-France',
+            'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+            'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+            'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+            'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+            'FR-O': 'Nord-Pas-de-Calais-Picardie',
+            'FR-P': "Normandie",
+            'FR-Q': "Normandie",
+            'FR-R': 'Pays de la Loire',
+            'FR-S': 'Nord-Pas-de-Calais-Picardie',
+            'FR-T': "Aquitaine-Limousin-Poitou-Charentes","""
 
     geo = {
-        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-C': "Auvergne-Rhône-Alpes",
-        'FR-D': "Bourgogne-Franche-Comté",
-        'FR-E': 'Bretagne',
-        'FR-F': 'Centre-Val de Loire',
-        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-H': 'Corse',
-        'FR-I': "Bourgogne-Franche-Comté",
-        'FR-J': 'Ile-de-France',
-        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-O': 'Nord-Pas-de-Calais-Picardie',
-        'FR-P': "Normandie",
-        'FR-Q': "Normandie",
-        'FR-R': 'Pays de la Loire',
-        'FR-S': 'Nord-Pas-de-Calais-Picardie',
-        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
         'FR-U': "Provence-Alpes-Côte d'Azur",
         'FR-V': "Auvergne-Rhône-Alpes",
         'BE': "Belgique"
     }
-    #actualize_trends(geo, list_topics, plot=True, only_hourly=True, refresh_daily=False)
+
+    actualize_trends(geo, list_topics, plot=False, only_hourly=False, refresh_daily=True)
     actualize_hospi()
-    actualize_trends_using_daily(util.european_geocodes, list_topics, plot=False, refresh=True)
+    # actualize_trends_using_daily(util.french_region_and_be, list_topics, plot=False, refresh=True)
