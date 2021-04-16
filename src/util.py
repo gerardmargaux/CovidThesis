@@ -14,6 +14,8 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import itertools
 import networkx as nx
 from functools import reduce
+import requests
+import io
 
 european_geocodes = {
     'AT': 'Austria',
@@ -434,6 +436,36 @@ def hospi_world(hospi_file: str, geo: Dict[str, str], renaming: Dict[str, str], 
     return data_dic
 
 
+def create_df_trends(url_trends: str, list_topics: Dict[str, str], geo: Dict[str, str]) -> Dict[str, pd.DataFrame]:
+    """
+    return dic of {geo: df} for the trends
+    :param url_trends: path to the trends data folder
+    :param list_topics: dict of topic title: topic code for each google trends
+    :param geo: dict of geo localisations to use
+    """
+    date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d")
+    renaming = {v: k for k, v in list_topics.items()}  # change topic_mid to topic_title in the dataframe
+    if len(renaming) == 0:
+        return {k: pd.DataFrame() for k in geo}
+    result = {}
+    for k, v in geo.items():
+        all_trends = []
+        for term in list_topics.keys():
+            path = f"{url_trends}{k}-{term}.csv"
+            if url_trends[:4] == "http":
+                encoded_path = requests.get(path).content
+                df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8")), parse_dates=['date'],
+                                        date_parser=date_parser).rename(columns={"date": "DATE"})
+            else:
+                df_trends = pd.read_csv(path, parse_dates=['date'], date_parser=date_parser).rename(columns={"date": "DATE"})
+            df_trends['LOC'] = k
+            df_trends.rename(columns=renaming, inplace=True)
+            df_trends.set_index(['LOC', 'DATE'], inplace=True)
+            all_trends.append(df_trends)
+        result[k] = pd.concat(all_trends, axis=1)
+    return result
+
+
 def world_adjacency_list(alpha: int = 3) -> List[Tuple[str, str]]:
     """
     :param alpha: iso code to use. Must be in [2, 3]
@@ -522,14 +554,15 @@ class DataGenerator:
                  target: str,
                  scaler_generator: callable,
                  scaler_type: str = "batch",
+                 data_columns: List[str] = None,
                  no_scaling: List[str] = None,
                  cumsum: bool = False,
                  predict_one: bool = False,
-                 target_in_x: bool = True,
                  augment_merge: int = 1,
                  augment_adjacency: List[Tuple[str, str]] = None,
                  augment_population: Dict[str, Union[int, float]] = None,
-                 augment_feature_pop: List[str] = None):
+                 augment_feature_pop: List[str] = None,
+                 no_lag: bool = False):
         """
         initialize a data generator. Takes a dict of {loc: dataframe} and use it to yield values suitable for training
         the data generator can augment the data by mixing regions together
@@ -544,12 +577,13 @@ class DataGenerator:
         :param no_scaling: list of features that must not be scaled
         :param cumsum: if True, accumulates Y using cumsum
         :param predict_one: if True, the target is Y at time n_forecast. Otherwhise, the target is Y in [t+1 ... t+n_forecast]
-        :param target_in_x: whether Y at the previous time steps should be included in X or not
         :param augment_merge: number of regions to merge in order to augment the data. If <=1, no data augmentation is performed
         :param augment_adjacency: use the list of adjacent region to augment the data. If None, all regions
             will be mixed, even unadjacent
         :param augment_population: population of each region. Must not be None if augment_feature_pop contains value
         :param augment_feature_pop: list of features that should be weighted according to the population
+        :param no_lag: if True, the dataframe will be considered as having the right format for training and add_lag
+            will not be called on it
         """
         self.n_samples = n_samples
         self.n_forecast = n_forecast
@@ -558,10 +592,18 @@ class DataGenerator:
         # add lag to the data to be able to reshape correctly
         df = deepcopy(df)
         dummy_df = next(iter(df.values()))
-        self.n_features = dummy_df.shape[1]
-        self.target_idx = dummy_df.columns.to_list().index(target)
+        if target in dummy_df:
+            self.target_idx = dummy_df.columns.to_list().index(target)
+        else:
+            self.target_idx = None  # the target is not in the dataframe, no need to specify it
         self.nb_loc = len(df)
         init_columns = list(dummy_df.columns)
+        if data_columns is None:
+            self.n_features = dummy_df.shape[1]
+            data_columns = init_columns  # all columns are considered to be data columns
+        else:
+            self.n_features = len(data_columns)
+
         # pad the values: add 0 at the beginning and at the end
         smallest_dates = {}
         highest_dates = {}
@@ -621,18 +663,8 @@ class DataGenerator:
                 else:
                     self.padded_idx[region_code] = reduce(np.union1d, ([self.padded_idx[k] for k in region_list]))
         self.loc_all = {**self.loc_init, **self.loc_augmented}
-
-        # add lagged values
-        self.df = {k: add_lag(v, - n_samples).join(add_lag(v[[target]], n_forecast), how='inner') for k, v in df.items()}
-        days_removed = n_forecast + n_samples - 1
-        self.padded_idx = {k: (v - days_removed).astype(int) for k, v in self.padded_idx.items()}
-        self.date_range = pd.date_range(min_date, max_date) - timedelta(days=days_removed)
-
-        self.scaler_type = scaler_type  # can be "batch", "window", "whole"
-        if no_scaling is None or target not in no_scaling:
-            self.target_unscaled = False
-        else:
-            self.target_unscaled = True
+        self.df_init = df  # contains the augmented data with padding and without lagged values
+        self.padded_idx_init = deepcopy(self.padded_idx)  # padded indexes before the add lag
         # get the target and data columns
         self.predict_one = predict_one
         if predict_one:
@@ -640,12 +672,26 @@ class DataGenerator:
         else:
             target_columns = [f"{target}(t+{t})" for t in range(1, n_forecast + 1)]
         self.target_columns = target_columns
-        if target_in_x:
-            data_columns = [f"{col}(t{t:+d})" for t in range(-n_samples+1, 0) for col in init_columns] + init_columns
+        self.data_columns_t0 = deepcopy(data_columns)
+        # name of x columns across time
+        self.data_columns = [f"{col}(t{t:+d})" for t in range(-n_samples+1, 0) for col in data_columns] + self.data_columns_t0
+
+        # add lagged values
+        if no_lag:  # the dataframe has already the right format
+            self.df = df
+            self.date_range = pd.date_range(min_date, max_date)
+        else:  # the dataframe must be constructed across time
+            self.df = {k: add_lag(v, - n_samples).join(add_lag(v[[target]], n_forecast),
+                                                                                  how='inner') for k, v in df.items()}
+            self.date_range = pd.date_range(min_date + timedelta(days=(n_samples-1)), max_date - timedelta(days=n_forecast))
+        days_removed = n_forecast + n_samples - 1
+        self.padded_idx = {k: (v - days_removed).astype(int) for k, v in self.padded_idx.items()}
+
+        self.scaler_type = scaler_type  # can be "batch", "window", "whole"
+        if no_scaling is None or target not in no_scaling:
+            self.target_unscaled = False
         else:
-            data_columns = [f"{col}(t{t:+d})" for t in range(-n_samples+1, 0) for col in init_columns if col != target] + \
-                           [col for col in init_columns if col != target]
-            self.n_features -= 1  # need to remove one feature as Y in the previous time steps is not included
+            self.target_unscaled = True
         # unscaled columns names accross horizon
         if no_scaling is None:
             self.to_scale = list(range(self.n_features))
@@ -659,7 +705,7 @@ class DataGenerator:
         self.idx = {}
         idx = 0
         for i, (loc, val) in enumerate(self.df.items()):
-            x = val[data_columns].values
+            x = val[self.data_columns].values
             y = val[target_columns].values
             if cumsum:
                 y = np.cumsum(y, axis=1)
@@ -681,14 +727,15 @@ class DataGenerator:
         self.scaler_generator = None  # initialized by the set_scaler method
         self.set_scaler(scaler_generator)
 
-    def set_scaler(self, scaler_generator):
+    def set_scaler(self, scaler_generator: callable):
         """
         set the scaler used by the datagenerator
+        :param scaler_generator: function that can be called to give the scaler to use
         """
         self.scaler_generator = scaler_generator
         # set the scaler
-        # if window: Dict[str, Dict[int, scaler]]: {loc: {feature_idx: scaler}}
-        # else: Dict[str, Dict[int, [Dict[int, scaler]]]]: {loc: {feature_idx: {idx: scaler}}}
+        # if window: Dict[str, Dict[int, [Dict[int, scaler]]]]: {loc: {feature_idx: {idx: scaler}}}
+        # else: Dict[str, Dict[int, scaler]]: {loc: {feature_idx: scaler}}
         if self.scaler_type == "window":  # relative index
             self.scaler_x = {loc: {feature: {i: self.scaler_generator() for i in self.relative_idx} for feature in self.to_scale} for loc in self.idx}
             self.scaler_y = {loc: {i: self.scaler_generator() for i in self.relative_idx} for loc in self.idx}
@@ -696,6 +743,13 @@ class DataGenerator:
             self.scaler_x = {loc: {feature: self.scaler_generator() for feature in self.to_scale} for loc in self.idx}
             self.scaler_y = {loc: self.scaler_generator() for loc in self.idx}
 
+    def set_loc_init(self, loc: Dict[str, str]):
+        """
+        set the initial loc and change the other loc to the augmented status
+        :param loc: dict of localisation to consider as unaugmented localisations
+        """
+        self.loc_init = deepcopy(loc)
+        self.loc_augmented = {k: v for k, v in self.loc_all.items() if k not in self.loc_init}
 
     def get_x_dates(self, idx: Iterable = None):
         """
@@ -769,13 +823,15 @@ class DataGenerator:
         return np.concatenate(X)
 
     def get_y(self, idx: Iterable[int] = None, geo: Dict[str, str] = None, scaled: bool = True,
-              use_previous_scaler: bool = False) -> np.array:
+              use_previous_scaler: bool = False, repeated_values: bool = False) -> np.array:
         """
         gives a Y tensor, that should be predicted based on X
         :param idx: relative indexes of the y values to provide. If None, provide the whole y values
         :param geo: localisations asked. If None, provide all loc
         :param scaled: if True, scale the data. Otherwhise, gives unscaled data
         :param use_previous_scaler: if True, use the scalers that were fit previously instead of new ones
+        :param repeated_values: should be False if for a loc y[i, t] == y[i+1, t-1] (This is the default behavior when
+            no_lag == True in the constructor). If True, the scaler will be fit on the whole Y matrix
         :return tensor of y values on the asked geo localisations and asked indexes.
         """
         if geo is None:
@@ -801,9 +857,12 @@ class DataGenerator:
                             val = self.scaler_y[loc].fit_transform(val)
                     else:
                         if not use_previous_scaler:
-                            old = val[:, 0]  # get the values at t+1
-                            new = val[-1, 1:]  # add the most recent values at t+2 ... t+n_forecast
-                            self.scaler_y[loc].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
+                            if repeated_values:
+                                self.scaler_y[loc].fit(val.reshape((-1, 1)))  # fit the scaler
+                            else:
+                                old = val[:, 0]  # get the values at t+1
+                                new = val[-1, 1:]  # add the most recent values at t+2 ... t+n_forecast
+                                self.scaler_y[loc].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
                         for t in range(val.shape[1]):  # apply the transformation on the target across time  # TODO optimize in one go
                             val[:, t] = self.scaler_y[loc].transform(val[:, t].reshape((-1, 1))).reshape((1, -1))
                     if self.scaler_type == "whole" and idx is not None:
@@ -822,14 +881,19 @@ class DataGenerator:
             Y.append(val)
         return np.concatenate(Y)
 
-    def inverse_transform_y(self, unscaled: np.array, geo: Union[str, Dict[str, str]] = None, idx: np.array = None):
+    def inverse_transform_y(self, unscaled: np.array, geo: Union[str, Dict[str, str]] = None, idx: np.array = None,
+                            return_type: str = 'array') -> Union[np.array, Dict[str, pd.DataFrame], Dict[str, np.array]]:
         """
         inverse transform the values provided, in order to get unscaled data
         uses the last scalers used in the get_y method
-        :param val: values to scale
+        :param unscaled: values to scale
         :param geo: localisation to scale. If None, all localisations are used. Must be in the order of Y:
             the first loc corresponds to the idx first entries in Y and so on
         :param idx: relative indexes of the scaling. Only relevant if the scaling type is batch
+        :param return_type: can be one of "array", "dict_array" or "dict_df"
+            - array: return a 2D np.array of values
+            - dict_array: return a dict of {loc: np.array}
+            - dict_df: return a dict of {loc: pd.DataFrame}
         """
         if geo is None:
             geo = self.idx  # only the keys are needed
@@ -841,6 +905,7 @@ class DataGenerator:
             idx = np.array(range(len(idx)))
 
         val = np.zeros(unscaled.shape)
+        return_df = {}
         if self.scaler_type == "batch" or self.scaler_type == "whole":
             offset = 0  # current offset in the Y tensor
             batch_size = len(idx)
@@ -849,14 +914,21 @@ class DataGenerator:
                 init_shape = unscaled[loc_idx, :].shape
                 val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(init_shape)
                 offset += batch_size  # increment the offset to get the values from the next batch
+                if return_type == 'dict_df':
+                    dates_used = self.date_range[idx]
+                    multi_index = pd.MultiIndex.from_product([[loc], dates_used], names=['LOC', 'DATE'])
+                    return_df[loc] = pd.DataFrame(val[loc_idx, :], columns=self.target_columns).set_index(
+                        multi_index)
+                elif return_type == 'dict_array':
+                    return_df[loc] = val[loc_idx, :]
         elif self.scaler_type == "window":
             offset = 0  # current offset in the Y tensor
             batch_size = len(idx)
             for loc in geo:
-                for j, i in enumerate(idx):
+                for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
                     val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(unscaled[i + offset, :].reshape((-1, 1))).reshape((1, -1))
                 offset += batch_size  # increment the offset to get the values from the next batch
-        return val
+        return val if return_type == 'array' else return_df
 
     def loc_to_idx(self, loc):  # return absolute idx
         return self.idx[loc]
@@ -911,6 +983,17 @@ class DataGenerator:
         else:
             return np.concatenate([val for val in filtered_values.values()])
 
+    def get_df_init(self) -> Dict[str, pd.DataFrame]:
+        """
+        return the initial dataframe that was used to construct the data, removing the padded values
+        augmented values are included
+        """
+        init_df = {}
+        for loc, df in self.df_init.items():
+            unpadded_idx = np.setdiff1d(range(len(df)), self.padded_idx_init[loc])
+            init_df[loc] = df.iloc[unpadded_idx]
+        return init_df
+
 
 class TestDataGenerator(unittest.TestCase):
 
@@ -942,9 +1025,9 @@ class TestDataGenerator(unittest.TestCase):
 if __name__ == "__main__":
     # -----------------------------------------------------------------------------------------------------------------------------------------------------
     # target, should be one of the hosp features
-
-    target = 'NEW_HOSP'
     """
+    target = 'NEW_HOSP'
+
     # topics considered
     list_topics = {
         #'Fièvre': '/m/0cjf0',
