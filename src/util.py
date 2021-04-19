@@ -751,6 +751,9 @@ class DataGenerator:
         self.loc_init = deepcopy(loc)
         self.loc_augmented = {k: v for k, v in self.loc_all.items() if k not in self.loc_init}
 
+    def set_padded_idx(self, padded_idx):
+        pass
+
     def get_x_dates(self, idx: Iterable = None):
         """
         gives the dates of the x values
@@ -993,6 +996,24 @@ class DataGenerator:
             unpadded_idx = np.setdiff1d(range(len(df)), self.padded_idx_init[loc])
             init_df[loc] = df.iloc[unpadded_idx]
         return init_df
+
+    def __str__(self):
+        """
+        contains informations about
+        - n_samples, n_forecast
+        - data columns
+        - target
+        - scaling done
+        - number of init and augmented regions, as well as their name
+        """
+        info = f'n_samples = {self.n_samples}, n_forecast = {self.n_forecast}\n'
+        info += f'data = {self.data_columns_t0}\n'
+        info += f'target = {self.target}\n'
+        info += f'scaling = {self.scaler_generator}, scaling type = {self.scaler_type}\n'
+        info += f'nb init regions = {len(self.loc_init)}, nb augmented regions = {len(self.loc_augmented)}\n'
+        list_regions = [loc for loc in self.df]
+        info += f'regions = {list_regions}'
+        return info
 
 
 class TestDataGenerator(unittest.TestCase):
