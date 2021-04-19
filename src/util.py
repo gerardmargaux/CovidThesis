@@ -257,7 +257,7 @@ def get_world_population(pop_file: str, alpha2: bool = True) -> Dict[str, float]
 
 
 def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium, department_france, geo,
-                               new_hosp_in=True, tot_hosp=True, date_begin: str = None):
+                               new_hosp=True, tot_hosp=True, new_hosp_in=False, date_begin: str = None):
     """
     Creates the dataframe containing the number of daily hospitalizations in Belgium and in the french regions
     with respect to the date and the localisation (FR and BE)
@@ -274,7 +274,7 @@ def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium
     data_columns = []  # final data columns that will be present in the df
     if new_hosp_in:
         columns_be['NEW_IN'] = 'sum'
-        data_columns.append("NEW_HOSP")
+        data_columns.append("NEW_HOSP_IN")
     if tot_hosp:
         columns_be['TOTAL_IN'] = 'sum'
         data_columns.append("TOT_HOSP")
@@ -284,7 +284,7 @@ def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium
     departements = pd.read_csv(department_france)
 
     # French data: total hospitalisation
-    if tot_hosp:
+    if tot_hosp or new_hosp:
         hospitalisations = pd.read_csv(hospi_france_tot, sep=";", parse_dates=['jour'], date_parser=date_parser)
         hospitalisations = hospitalisations[hospitalisations['sexe'] == 0]  # sex=0: men and women
         data_fr_tot = hospitalisations.join(departements.set_index('departmentCode'), on="dep").groupby(
@@ -298,19 +298,19 @@ def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium
 
     # merge the french data
     common_columns = ["regionTrends", "jour"]
-    if tot_hosp and new_hosp_in:
+    if (tot_hosp or new_hosp) and new_hosp_in:
         data_fr = data_fr_tot.merge(data_fr_new, how='outer', left_on=common_columns, right_on=common_columns).fillna(0)
-    elif tot_hosp:
+    elif tot_hosp or new_hosp:
         data_fr = data_fr_tot
     elif new_hosp_in:
         data_fr = data_fr_new
     data_fr = data_fr.rename(
-        columns={"jour": "DATE", "regionTrends": "LOC", "hosp": "TOT_HOSP", "incid_hosp": "NEW_HOSP"})
+        columns={"jour": "DATE", "regionTrends": "LOC", "hosp": "TOT_HOSP", "incid_hosp": "NEW_HOSP_IN"})
 
     # Belgian data
     data_be = pd.read_csv(hospi_belgium, parse_dates=['DATE'], date_parser=date_parser).groupby(
         ["DATE"], as_index=False).agg(columns_be).rename(
-        columns={"TOTAL_IN": "TOT_HOSP", "NEW_IN": "NEW_HOSP"})
+        columns={"TOTAL_IN": "TOT_HOSP", "NEW_IN": "NEW_HOSP_IN"})
     data_be["LOC"] = "BE"
 
     # Full data
@@ -345,6 +345,9 @@ def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium
     for k, v in geo.items():
         data_dic[k] = full_data.iloc[(full_data.index.get_level_values('LOC') == k) &
                                      (full_data.index.get_level_values('DATE') <= highest_date)]
+        if new_hosp:
+            data_dic[k]['NEW_HOSP'] = data_dic[k]['TOT_HOSP'].diff()
+            data_dic[k].at[data_dic[k].index.min(), 'NEW_HOSP'] = 0
     return data_dic
 
 
@@ -588,14 +591,15 @@ class DataGenerator:
         self.n_samples = n_samples
         self.n_forecast = n_forecast
         self.target = target
+        self.cumsum = cumsum
         # transform the dict of dataframe into shape [samples, time_steps, features]
         # add lag to the data to be able to reshape correctly
         df = deepcopy(df)
         dummy_df = next(iter(df.values()))
-        if target in dummy_df:
-            self.target_idx = dummy_df.columns.to_list().index(target)
+        if target in data_columns:
+            self.target_idx = data_columns.index(target)
         else:
-            self.target_idx = None  # the target is not in the dataframe, no need to specify it
+            self.target_idx = None  # the target is not in the data columns, no need to specify it
         self.nb_loc = len(df)
         init_columns = list(dummy_df.columns)
         if data_columns is None:
@@ -860,7 +864,7 @@ class DataGenerator:
                             val = self.scaler_y[loc].fit_transform(val)
                     else:
                         if not use_previous_scaler:
-                            if repeated_values:
+                            if repeated_values or self.cumsum:
                                 self.scaler_y[loc].fit(val.reshape((-1, 1)))  # fit the scaler
                             else:
                                 old = val[:, 0]  # get the values at t+1
