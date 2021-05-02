@@ -1077,6 +1077,7 @@ def mean_query(number: int, begin: datetime, end: datetime, topic: str, geo: str
     for k, (begin_tmp, end_tmp) in enumerate(dates_iterator(begin, end, number)):
         timeframe = dates_to_timeframe(begin_tmp, end_tmp)
         # Initialize build_payload with the word we need data for
+        tor_ip_changer.get_new_ip()
         build_payload = partial(pytrends.build_payload,
                                 kw_list=[topic], cat=cat, geo=geo, gprop='')
         if verbose:
@@ -1664,7 +1665,7 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 df_tot = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index('date')
                 # retrieve the dates already covered
                 gb = df_tot.groupby("batch_id")
-                df = gb.get_group(len(gb.size()) - 1)
+                df = gb.get_group(len(gb.size())-1)
                 begin_covered = df.index.min().to_pydatetime()
                 end_covered = df_tot.index.max().to_pydatetime()
                 if end_covered == latest_day or not refresh:  # no need to update the file
@@ -1700,18 +1701,16 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 if (cur_end - cur_begin).days <= last_length:  # the last query can be done safely
                     list_dates.append((cur_begin, cur_end))
                 else:  # need to split the last query into 2 sets of queries
-                    if cur_begin + timedelta(max_query_days - nb_mean) <= latest_day:
-                        cur_end = cur_begin + timedelta(max_query_days - nb_mean)
+                    cur_end = cur_begin + timedelta(max_query_days - nb_mean)
                     list_dates.append((cur_begin, cur_end))
                     cur_begin += timedelta(days=(length - overlap))
                     cur_end = latest_day
-                    if cur_begin < cur_end:
-                        list_dates.append((cur_begin, cur_end))
+                    list_dates.append((cur_begin, cur_end))
 
                 # send the queries
                 for i, (date_from, date_to) in enumerate(list_dates):
                     if verbose:
-                        print(f"{loc}-{topic_name}: retrieving batch {i + 1}/{len(list_dates)} ")
+                        print(f"{loc}-{topic_name}: retrieving batch {i+1}/{len(list_dates)} ")
                     df = mean_query(nb_mean, date_from, date_to, topic_code, loc, verbose=verbose)
                     df["batch_id"] = batch_id
                     df_tot = df_tot.append(df)
@@ -1758,21 +1757,26 @@ def collect_all_daily_gap(geocodes: Dict[str, str], topics: Dict[str, str], plot
 
 if __name__ == "__main__":
 
+    try:
+        from toripchanger import TorIpChanger
+        tor_ip_changer = TorIpChanger(tor_password='my password', tor_port=9051, local_http_proxy='127.0.0.1:8118')
+    except:
+        pass
+
     list_topics = {
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
-        # 'Dyspnée': '/m/01cdt5',
-        # 'Agueusie': '/m/05sfr2',
-        # 'Anosmie': '/m/0m7pl',
-        # 'Virus': '/m/0g9pc',
-        # 'Épidémie': '/m/0hn9s',
+        'Dyspnée': '/m/01cdt5',
+        'Agueusie': '/m/05sfr2',
+        'Anosmie': '/m/0m7pl',
+        'Virus': '/m/0g9pc',
+        'Épidémie': '/m/0hn9s',
         'Symptôme': '/m/01b_06',
-        # 'Thermomètre': '/m/07mf1',
-        # 'Grippe espagnole': '/m/01c751',
-        # 'Paracétamol': '/m/0lbt3',
-        # 'Respiration': '/m/02gy9_',
-        # 'Toux': '/m/01b_21',
-        # 'Coronavirus': '/m/01cpyy'
+        'Thermomètre': '/m/07mf1',
+        'Grippe espagnole': '/m/01c751',
+        'Paracétamol': '/m/0lbt3',
+        'Respiration': '/m/02gy9_',
+        'Toux': '/m/01b_21'
     }
 
     geo = {
@@ -1803,5 +1807,4 @@ if __name__ == "__main__":
 
     # actualize_trends(geo, list_topics, plot=False, only_hourly=False, refresh_daily=True)
     # actualize_hospi()
-    # actualize_trends_using_daily(util.french_region_and_be, list_topics, plot=False, refresh=True)
-    collect_all_daily_gap({'DE': 'Germany'}, list_topics, plot=True, verbose=True, refresh=False)
+    actualize_trends_using_daily(util.european_geocodes, list_topics, plot=False, refresh=True)
