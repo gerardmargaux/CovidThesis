@@ -1801,6 +1801,7 @@ if __name__ == "__main__":
         'BE': "Belgique"
     }
 
-    actualize_trends(geo, list_topics, plot=False, only_hourly=False, refresh_daily=True)
-    actualize_hospi()
+    # actualize_trends(geo, list_topics, plot=False, only_hourly=False, refresh_daily=True)
+    # actualize_hospi()
     # actualize_trends_using_daily(util.french_region_and_be, list_topics, plot=False, refresh=True)
+    collect_all_daily_gap({'DE': 'Germany'}, list_topics, plot=True, verbose=True, refresh=False)

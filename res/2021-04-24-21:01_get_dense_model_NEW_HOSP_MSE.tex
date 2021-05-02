@@ -1,0 +1,33 @@
+%2021-04-24-21:01_get_dense_model_NEW_HOSP_MSE
+\begin{table}[H]
+\centering
+\caption{MSE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MSE_walk_dense_model}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &   mean \\
+\midrule
+t+1  & 39.76  & 280.84  & 112.21  & 118.98  & \textbf{16.56}  & 113.67  \\
+t+2  & 88.62  & 266.73  & 111.81  & 96.19  & \textbf{36.27}  & 119.92  \\
+t+3  & 128.96  & 320.68  & 140.41  & 178.34  & \textbf{82.28}  & 170.13  \\
+t+4  & 178.18  & 362.49  & 165.74  & 314.30  & \textbf{114.31}  & 227.00  \\
+t+5  & 244.76  & 431.66  & 346.39  & \textbf{123.54}  & 145.84  & 258.44  \\
+t+6  & 368.30  & 444.87  & 296.80  & \textbf{145.02}  & 155.95  & 282.19  \\
+t+7  & 393.99  & 533.00  & 313.65  & \textbf{172.19}  & 193.19  & 321.20  \\
+t+8  & 417.09  & 538.52  & 361.72  & \textbf{156.76}  & 251.40  & 345.10  \\
+t+9  & 517.76  & 552.93  & 412.41  & \textbf{162.87}  & 274.81  & 384.16  \\
+t+10  & 542.63  & 550.60  & 367.12  & \textbf{141.54}  & 299.64  & 380.31  \\
+t+11  & 486.29  & 607.94  & 416.84  & \textbf{162.61}  & 313.32  & 397.40  \\
+t+12  & 501.07  & 615.50  & 392.27  & \textbf{157.87}  & 325.17  & 398.38  \\
+t+13  & 484.48  & 675.56  & 431.00  & \textbf{151.72}  & 338.45  & 416.24  \\
+t+14  & 494.15  & 653.55  & 375.29  & \textbf{268.63}  & 345.80  & 427.48  \\
+t+15  & 573.03  & 699.70  & 422.02  & \textbf{196.02}  & 350.46  & 448.24  \\
+t+16  & 493.86  & 652.00  & 415.69  & \textbf{266.01}  & 359.05  & 437.32  \\
+t+17  & 571.03  & 646.53  & \textbf{327.92}  & 378.27  & 354.23  & 455.60  \\
+t+18  & 548.30  & 613.37  & 375.69  & \textbf{281.13}  & 332.51  & 430.20  \\
+t+19  & 537.89  & 584.50  & 367.23  & 366.63  & \textbf{352.87}  & 441.82  \\
+t+20  & 517.14  & 505.40  & 354.09  & \textbf{335.53}  & 355.61  & 413.56  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

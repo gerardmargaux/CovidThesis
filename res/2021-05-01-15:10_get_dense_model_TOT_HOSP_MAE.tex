@@ -1,0 +1,33 @@
+%2021-05-01-15:10_get_dense_model_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_dense_model}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &   mean \\
+\midrule
+t+1  & 211.84  & 74.57  & 97.26  & 26.74  & \textbf{17.80}  & 85.64  \\
+t+2  & 203.25  & 52.54  & 71.27  & 21.78  & \textbf{19.28}  & 73.63  \\
+t+3  & 196.66  & 55.77  & 77.74  & 35.26  & \textbf{26.39}  & 78.37  \\
+t+4  & 193.08  & 86.72  & 145.30  & \textbf{29.98}  & 31.22  & 97.26  \\
+t+5  & 188.77  & 65.08  & 101.85  & \textbf{33.82}  & 56.40  & 89.18  \\
+t+6  & 187.69  & 73.83  & 167.19  & \textbf{49.31}  & 67.42  & 109.09  \\
+t+7  & 185.76  & 80.09  & 135.31  & \textbf{41.68}  & 77.34  & 104.04  \\
+t+8  & 183.55  & 89.42  & 205.34  & \textbf{49.85}  & 63.79  & 118.39  \\
+t+9  & 179.53  & 98.14  & 181.41  & \textbf{65.95}  & 71.42  & 119.29  \\
+t+10  & 181.46  & 108.38  & 133.16  & \textbf{57.29}  & 116.03  & 119.27  \\
+t+11  & 186.07  & 158.78  & 194.08  & \textbf{80.07}  & 103.50  & 144.50  \\
+t+12  & 182.94  & 142.86  & 149.87  & \textbf{83.43}  & 113.47  & 134.51  \\
+t+13  & 186.33  & 152.26  & 223.16  & \textbf{92.53}  & 129.46  & 156.75  \\
+t+14  & 204.02  & 174.75  & 247.12  & \textbf{79.40}  & 137.47  & 168.55  \\
+t+15  & 197.34  & 230.62  & 249.37  & \textbf{108.39}  & 184.21  & 193.99  \\
+t+16  & 209.12  & 207.91  & 232.74  & \textbf{97.96}  & 167.88  & 183.12  \\
+t+17  & 224.60  & 271.34  & 264.98  & \textbf{105.05}  & 212.95  & 215.78  \\
+t+18  & 235.87  & 299.53  & 242.67  & \textbf{114.25}  & 202.98  & 219.06  \\
+t+19  & 245.78  & 327.49  & 208.59  & \textbf{145.26}  & 247.82  & 234.99  \\
+t+20  & 272.44  & 346.40  & 213.67  & \textbf{152.05}  & 221.31  & 241.17  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

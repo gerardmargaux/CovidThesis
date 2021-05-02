@@ -1,0 +1,33 @@
+%2021-04-24-19:10_get_dense_model_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_dense_model}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &   mean \\
+\midrule
+t+1  & 210.06  & 58.66  & 102.21  & 17.35  & \textbf{17.29}  & 81.11  \\
+t+2  & 202.77  & 69.76  & 82.85  & 32.44  & \textbf{29.14}  & 83.39  \\
+t+3  & 198.80  & 100.03  & 69.24  & \textbf{27.68}  & 39.38  & 87.03  \\
+t+4  & 198.51  & 96.12  & 161.78  & 38.16  & \textbf{27.17}  & 104.35  \\
+t+5  & 188.37  & 214.54  & 145.36  & 42.50  & \textbf{34.09}  & 124.97  \\
+t+6  & 185.04  & 104.78  & 122.89  & \textbf{38.75}  & 46.30  & 99.55  \\
+t+7  & 182.52  & 136.77  & 160.28  & \textbf{55.50}  & 56.14  & 118.24  \\
+t+8  & 182.19  & 161.53  & 136.35  & \textbf{61.56}  & 87.85  & 125.90  \\
+t+9  & 180.59  & 203.49  & 218.20  & \textbf{53.06}  & 99.17  & 150.90  \\
+t+10  & 179.16  & 174.46  & 203.12  & \textbf{54.66}  & 111.89  & 144.66  \\
+t+11  & 179.28  & 236.03  & 205.26  & \textbf{80.57}  & 97.47  & 159.72  \\
+t+12  & 184.60  & 257.31  & 211.90  & \textbf{84.49}  & 141.11  & 175.88  \\
+t+13  & 193.03  & 181.44  & 180.77  & \textbf{74.75}  & 153.70  & 156.74  \\
+t+14  & 197.54  & 300.27  & 201.54  & \textbf{83.47}  & 137.30  & 184.02  \\
+t+15  & 198.12  & 234.97  & 245.26  & \textbf{107.35}  & 153.25  & 187.79  \\
+t+16  & 224.23  & 274.44  & 189.87  & \textbf{116.01}  & 203.73  & 201.66  \\
+t+17  & 221.65  & 318.58  & 193.21  & \textbf{124.82}  & 185.59  & 208.77  \\
+t+18  & 235.19  & 356.20  & 251.17  & \textbf{134.69}  & 204.75  & 236.40  \\
+t+19  & 244.39  & 452.24  & 228.89  & \textbf{125.64}  & 236.51  & 257.53  \\
+t+20  & 258.76  & 319.77  & 246.70  & \textbf{152.43}  & 227.07  & 240.94  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,33 @@
+%2021-05-01-15:46_MAE_NEW_HOSP
+\begin{table}[H]
+\centering
+\caption{MAE when predicting new hospitalizations for the different models, for up to 20 horizons. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_comparison}
+\begin{tabular}{lrrr}
+\toprule
+Horizon &  Baseline &  Linear Regression &  Dense \\
+\midrule
+t+1  & \textbf{4.22}  & 10.71  & 6.09  \\
+t+2  & \textbf{5.64}  & 11.97  & 7.50  \\
+t+3  & \textbf{6.95}  & 13.19  & 8.16  \\
+t+4  & \textbf{8.14}  & 14.41  & 9.01  \\
+t+5  & \textbf{9.24}  & 15.56  & 9.35  \\
+t+6  & 10.20  & 16.67  & \textbf{9.89}  \\
+t+7  & 11.09  & 17.72  & \textbf{10.60}  \\
+t+8  & 11.59  & 18.66  & \textbf{10.93}  \\
+t+9  & 12.08  & 19.60  & \textbf{11.51}  \\
+t+10  & 12.45  & 20.47  & \textbf{11.76}  \\
+t+11  & 12.81  & 21.33  & \textbf{11.94}  \\
+t+12  & 13.11  & 22.19  & \textbf{11.63}  \\
+t+13  & 13.38  & 23.05  & \textbf{12.14}  \\
+t+14  & 13.63  & 23.87  & \textbf{12.00}  \\
+t+15  & 13.83  & 24.68  & \textbf{12.20}  \\
+t+16  & 13.98  & 25.49  & \textbf{12.85}  \\
+t+17  & 14.13  & 26.30  & \textbf{12.70}  \\
+t+18  & 14.27  & 27.10  & \textbf{12.51}  \\
+t+19  & 14.41  & 27.89  & \textbf{12.72}  \\
+t+20  & 14.56  & 28.70  & \textbf{13.11}  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

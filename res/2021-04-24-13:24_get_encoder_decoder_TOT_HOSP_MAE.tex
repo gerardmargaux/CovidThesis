@@ -1,0 +1,33 @@
+%2021-04-24-13:24_get_encoder_decoder_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_encoder_decoder}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &    mean \\
+\midrule
+t+1  & 1204.91  & \textbf{1009.02}  & 1093.00  & 1022.91  & 1078.80  & 1081.73  \\
+t+2  & 1171.67  & \textbf{957.25}  & 1071.05  & 979.46  & 1059.20  & 1047.72  \\
+t+3  & 1142.66  & \textbf{905.82}  & 1053.79  & 938.17  & 1046.45  & 1017.38  \\
+t+4  & 1117.31  & \textbf{858.09}  & 1040.47  & 900.97  & 1039.38  & 991.25  \\
+t+5  & 1095.17  & \textbf{815.79}  & 1030.33  & 868.55  & 1037.08  & 969.39  \\
+t+6  & 1075.79  & \textbf{779.59}  & 1022.64  & 840.90  & 1038.20  & 951.42  \\
+t+7  & 1058.67  & \textbf{749.54}  & 1016.82  & 817.73  & 1041.98  & 936.95  \\
+t+8  & 1043.58  & \textbf{725.15}  & 1012.41  & 798.61  & 1047.62  & 925.47  \\
+t+9  & 1030.24  & \textbf{705.86}  & 1009.01  & 783.09  & 1054.54  & 916.55  \\
+t+10  & 1018.36  & \textbf{691.06}  & 1006.26  & 770.76  & 1062.32  & 909.75  \\
+t+11  & 1007.79  & \textbf{680.04}  & 1003.88  & 761.31  & 1070.71  & 904.75  \\
+t+12  & 998.36  & \textbf{672.14}  & 1001.71  & 754.42  & 1079.41  & 901.21  \\
+t+13  & 989.94  & \textbf{666.80}  & 999.58  & 749.80  & 1089.16  & 899.06  \\
+t+14  & 982.42  & \textbf{663.53}  & 997.39  & 747.19  & 1100.36  & 898.18  \\
+t+15  & 975.66  & \textbf{661.96}  & 995.09  & 746.35  & 1112.33  & 898.28  \\
+t+16  & 969.60  & \textbf{661.69}  & 992.67  & 747.26  & 1124.47  & 899.14  \\
+t+17  & 964.16  & \textbf{662.38}  & 990.18  & 749.76  & 1135.49  & 900.39  \\
+t+18  & 959.28  & \textbf{663.81}  & 987.63  & 753.56  & 1145.03  & 901.86  \\
+t+19  & 954.85  & \textbf{665.87}  & 985.00  & 758.46  & 1153.85  & 903.60  \\
+t+20  & 950.79  & \textbf{668.34}  & 982.41  & 764.31  & 1161.17  & 905.40  \\
+
+\bottomrule
+\end{tabular}
+\end{table}
