@@ -1690,7 +1690,7 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 batch_id = 0
             if not is_updated:
                 list_dates = []
-                last_length = max_query_days - overlap - nb_mean
+                last_length = max_query_days - nb_mean  # max length for the last query
 
                 while cur_end < latest_day:
                     list_dates.append((cur_begin, cur_end))
@@ -1701,11 +1701,12 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 if (cur_end - cur_begin).days <= last_length:  # the last query can be done safely
                     list_dates.append((cur_begin, cur_end))
                 else:  # need to split the last query into 2 sets of queries
-                    cur_end = cur_begin + timedelta(max_query_days - nb_mean)
+                    cur_end = cur_begin + timedelta(last_length)
                     list_dates.append((cur_begin, cur_end))
                     cur_begin += timedelta(days=(length - overlap))
                     cur_end = latest_day
                     list_dates.append((cur_begin, cur_end))
+
 
                 # send the queries
                 for i, (date_from, date_to) in enumerate(list_dates):
