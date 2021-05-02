@@ -1,7 +1,5 @@
 # hold constant and utility functions
 import unittest
-from tensorflow.keras.callbacks import Callback, EarlyStopping
-from tensorflow.keras.metrics import RootMeanSquaredError
 
 from typing import List, Tuple, Dict, Iterable, Union
 import pycountry
