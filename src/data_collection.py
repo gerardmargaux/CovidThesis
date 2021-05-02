@@ -1771,7 +1771,7 @@ if __name__ == "__main__":
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
         'Dyspnée': '/m/01cdt5',
-        'Agueusie': '/m/05sfr2',
+        #'Agueusie': '/m/05sfr2',
         'Anosmie': '/m/0m7pl',
         'Virus': '/m/0g9pc',
         'Épidémie': '/m/0hn9s',
