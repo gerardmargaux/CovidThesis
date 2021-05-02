@@ -1077,7 +1077,10 @@ def mean_query(number: int, begin: datetime, end: datetime, topic: str, geo: str
     for k, (begin_tmp, end_tmp) in enumerate(dates_iterator(begin, end, number)):
         timeframe = dates_to_timeframe(begin_tmp, end_tmp)
         # Initialize build_payload with the word we need data for
-        tor_ip_changer.get_new_ip()
+        try:
+            current_ip = tor_ip_changer.get_new_ip()
+        except:
+            pass
         build_payload = partial(pytrends.build_payload,
                                 kw_list=[topic], cat=cat, geo=geo, gprop='')
         if verbose:
