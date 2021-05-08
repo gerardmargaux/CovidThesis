@@ -1,15 +1,20 @@
 # generates the examples plots written in the latex file
 import matplotlib.pyplot as plt
 import numpy as np
-import datetime
+from datetime import date, datetime, timedelta
 from sklearn.linear_model import LinearRegression
 import tensorflow as tf
-
+import util
+import trends_query
+import time
 import random
+import pandas as pd
 from pytrends.exceptions import ResponseError
 from pytrends.request import TrendReq
+from bisect import bisect, bisect_left
 
 plot_example_dir = '../plot/examples'
+dir_tor_experiments = '../data/trends/tor_experiment'
 n_samples = 20
 n_forecast = 10
 sample_test = 30  # number of test sample predicted on for the prediction on a horizon
@@ -25,20 +30,28 @@ def target_function(x):  # target used for the models
     return (np.cos(x) + 1) / 2
 
 
+def plt_prepare():
+    plt.figure(figsize=(5, 4))
+
+
+def plt_finish():
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+
+
 def plot_sample_prediction(y_train, y_predicted, y_actual):
     """
     function called by all plotting function for a single window. Plot the target used in the training part of the
     window (y_train), the target predicted (y_predicted) and the real target (y_actual)
     """
-    plt.figure(figsize=(5, 4))
+    plt_prepare()
     x_train = range(len(y_train))
     x_predicted = range(len(y_train), len(y_train) + len(y_predicted))
     plt.plot(x_train, y_train, linestyle='-', marker='o', color=color_train, label='Value of the last days')
     plt.plot(x_predicted, y_actual, 'o', color=color_actual, label='True value')
     plt.plot(x_predicted, y_predicted, 'X', color=color_prediction, label='Prediction')
-    plt.grid()
-    plt.legend()
-    plt.tight_layout()
+    plt_finish()
 
 
 def plot_prediction_single_horizon(y_predicted, y_actual, y_train=None, horizon=1):
@@ -176,74 +189,109 @@ def plot_prediction_t_1():
     plot_prediction_dense_model_t_1()
 
 
-def random_query():
-    geo = {
-    'AT': 'Austria',
-    'BE': 'Belgium',
-    'BG': 'Bulgaria',
-    'CY': 'Cyprus',
-    'CZ': 'Czechia',
-    'DE': 'Germany',
-    'DK': 'Denmark',
-    'EE': 'Estonia',
-    'ES': 'Spain',
-    'FI': 'Finland',
-    'FR': 'France',
-    'GB': 'Great Britain',
-    'GR': 'Greece',
-    'HR': 'Croatia',
-    'HU': 'Hungary',
-    'IS': 'Iceland',
-    'IE': 'Ireland',
-    'IT': 'Italy',
-    'LT': 'Lithuania',
-    'LU': 'Luxembourg',
-    'LV': 'Latvia',
-    'MT': 'Malta',
-    'NL': 'Netherlands',
-    'NO': 'Norway',
-    'PL': 'Poland',
-    'PT': 'Portugal',
-    'RO': 'Romania',
-    'SE': 'Sweden',
-    'SI': 'Slovenia',
-    'SK': 'Slovakia',
-}
-    geo_list = list(geo.keys())  # random.choice does not work on dic
-    topics = {
-        'Fièvre': '/m/0cjf0',
-        'Mal de gorge': '/m/0b76bty',
-        # 'Dyspnée': '/m/01cdt5',
-        # 'Agueusie': '/m/05sfr2',
-        # 'Anosmie': '/m/0m7pl',
-        # 'Virus': '/m/0g9pc',
-        # 'Épidémie': '/m/0hn9s',
-        'Symptôme': '/m/01b_06',
-        # 'Thermomètre': '/m/07mf1',
-        # 'Grippe espagnole': '/m/01c751',
-        # 'Paracétamol': '/m/0lbt3',
-        # 'Respiration': '/m/02gy9_',
-        # 'Toux': '/m/01b_21',
-        # 'Coronavirus': '/m/01cpyy'
-    }
-    kw = [[code] for code in topics.values()]
-
+def tor_vs_local():
     def random_timeframe():
-        end_date = datetime.date(year=random.randint(2006, 2020), month=random.randint(1, 12), day=random.randint(1, 28))
-        delta = datetime.timedelta(days=random.randint(8, 270))
+        end_date = date(year=random.randint(2006, 2020), month=random.randint(1, 12), day=random.randint(1, 28))
+        delta = timedelta(days=random.randint(8, 260))
         beign_date = end_date - delta
         timeframe = f"{beign_date.strftime('%Y-%m-%d')} {end_date.strftime('%Y-%m-%d')}"
         return timeframe
 
-    for loc in random.choice(geo_list):
-        for search in random.choice(kw):
-            pytrends = TrendReq()
-            pytrends.build_payload(search, cat=0, timeframe=random_timeframe(), geo=loc)
-            df = pytrends.interest_over_time()
+    max_runtime = 3 * 3600  # runtime in seconds
+    topics = util.list_topics
+    geo = util.european_geocodes
+    geo_list = list(geo.keys())  # random.choice does not work on dic
+    sleep_intermediate = lambda: time.sleep(np.random.random())
+    random.seed(int(time.time()))
+    sleep_error = lambda: time.sleep(60 + np.random.randint(30, 90))
+    kw = [[code] for code in topics.values()]
+    pytrends_list = [trends_query.TorTrendsRequest, trends_query.LocalTrendsRequest]
+    for i, pytrends_class in enumerate(pytrends_list):
+        pytrends = pytrends_class(max_errors=0)
+        init = time.perf_counter()
+        elapsed = 0
+        elapsed_nb_requests = []
+        nb_requests = []
+        elapsed_nb_errors = []
+        nb_errors = []
+        while elapsed < max_runtime:
+            loc = random.choice(geo_list)
+            search = random.choice(kw)
+            sleep_intermediate()
+            errors = pytrends.nb_exception
+            try:
+                pytrends.build_payload(search, cat=0, timeframe=random_timeframe(), geo=loc)
+                _ = pytrends.interest_over_time()
+            except Exception as err:
+                print(f'caught exception ({type(err)})')
+                sleep_error()
+            current = time.perf_counter()
+            elapsed = current - init
+            elapsed_nb_requests.append(elapsed)
+            nb_requests.append(pytrends.request_done)
+            if pytrends.nb_exception != errors:
+                elapsed_nb_errors.append(elapsed)
+                nb_errors.append(pytrends.nb_exception)
+            print(f'{pytrends.request_done} requests done. Elapsed time: {elapsed:.2f} [s] '
+                  f'(remaining: {max_runtime-elapsed:.2f} [s]). '
+                  f'({pytrends.request_done / elapsed:.3f} [req/s]). {pytrends.nb_exception} errors happened. '
+                  f'Using {pytrends.__class__.__name__}')
+        df_errors = pd.DataFrame(data={'elapsed': elapsed_nb_errors, 'errors': nb_errors})
+        df_nb_requests = pd.DataFrame(data={'elapsed': elapsed_nb_requests, 'nb_requests': nb_requests})
+        df_errors.to_csv(f'{dir_tor_experiments}/{pytrends.__class__.__name__}_errors_5.csv', index=False)
+        df_nb_requests.to_csv(f'{dir_tor_experiments}/{pytrends.__class__.__name__}_nb_requests_5.csv', index=False)
+        time.sleep(300)
 
 
+def plot_tor_vs_local():
+    df_errors_tor = pd.read_csv(f'{dir_tor_experiments}/TorTrendsRequest_errors_4.csv')
+    df_errors_local = pd.read_csv(f'{dir_tor_experiments}/LocalTrendsRequest_errors_4.csv')
+    df_nb_requests_tor = pd.read_csv(f'{dir_tor_experiments}/TorTrendsRequest_nb_requests_4.csv')
+    df_nb_requests_local = pd.read_csv(f'{dir_tor_experiments}/LocalTrendsRequest_nb_requests_4.csv')
+    color_tor = color_prediction
+    color_local = color_train
+    if not df_errors_tor.empty:
+        tor_error_idx = [bisect_left(df_nb_requests_tor['elapsed'], row['elapsed'])
+                       for _, row in df_errors_tor.iterrows()]
+        tor_error_value = df_nb_requests_tor.iloc[tor_error_idx]['nb_requests']
+        tor_error_axis = df_nb_requests_tor.iloc[tor_error_idx]['elapsed']
+    if not df_errors_local.empty:
+        local_error_idx = [bisect_left(df_nb_requests_local['elapsed'], row['elapsed'])
+                       for _, row in df_errors_local.iterrows()]
+        local_error_value = df_nb_requests_local.iloc[local_error_idx]['nb_requests']
+        local_error_axis = df_nb_requests_local.iloc[local_error_idx]['elapsed']
+
+    plt_prepare()
+    # plot the last y_actual points as the beginning of the curve
+    plt.plot(df_nb_requests_local['elapsed'], df_nb_requests_local['nb_requests'], color=color_local, label='local')
+    if not df_errors_local.empty:
+        plt.plot(local_error_axis, local_error_value, linestyle='',
+                 color=color_local, marker='.', label='local error (sleep)')
+    plt.plot(df_nb_requests_tor['elapsed'], df_nb_requests_tor['nb_requests'], color=color_tor, label='tor')
+    if not df_errors_tor.empty:
+        plt.plot(tor_error_axis, tor_error_value, linestyle='',
+                 color=color_tor, marker='.', label='tor error (IP reset)')
+    plt.xlabel('Time elapsed [s]')
+    plt.ylabel('Number of requests [/]')
+    plt_finish()
+    plt.savefig(f'{plot_example_dir}/tor_vs_local_queries_4', dpi=200)
+    plt_prepare()
+    plt.plot(df_nb_requests_local['elapsed'], df_nb_requests_local['nb_requests'] / df_nb_requests_local['elapsed'],
+             color=color_local, label='local')
+    if not df_errors_local.empty:
+        plt.plot(local_error_axis, local_error_value / local_error_axis, linestyle='',
+                 color=color_local, marker='.', label='local error (sleep)')
+    plt.plot(df_nb_requests_tor['elapsed'], df_nb_requests_tor['nb_requests'] / df_nb_requests_tor['elapsed'],
+             color=color_tor, label='tor')
+    if not df_errors_tor.empty:
+        plt.plot(tor_error_axis, tor_error_value / tor_error_axis, linestyle='',
+                 color=color_tor, marker='.', label='tor error (IP reset)')
+    plt.xlabel('Time elapsed [s]')
+    plt.ylabel('Rate [requests/s]')
+    plt_finish()
+    plt.savefig(f'{plot_example_dir}/tor_vs_local_rate_4', dpi=200)
 
 
 if __name__ == '__main__':
-    plot_prediction()
-    plot_prediction_t_1()
+    # tor_vs_local()
+    plot_tor_vs_local()

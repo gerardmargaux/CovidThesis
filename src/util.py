@@ -167,35 +167,51 @@ france_region_adjacency = [
 
 # source: https://en.wikipedia.org/wiki/List_of_European_countries_by_population (UN estimate)
 european_population = {
-    'AT':  9_006_398,
+    'AT': 9_006_398,
     'BE': 11_589_623,
-    'BG':  6_948_445,
-    'CY':  1_195_750,
+    'BG': 6_948_445,
+    'CY': 1_195_750,
     'CZ': 10_729_333,
     'DE': 83_783_942,
-    'DK':  5_805_607,
-    'EE':  1_330_299,
+    'DK': 5_805_607,
+    'EE': 1_330_299,
     'ES': 46_811_531,
-    'FI':  5_548_480,
+    'FI': 5_548_480,
     'FR': 65_273_511,
     'GR': 10_391_029,
-    'HR':  4_086_308,
-    'HU':  9_646_008,
-    'IS':    343_008,
-    'IE':  4_992_908,
+    'HR': 4_086_308,
+    'HU': 9_646_008,
+    'IS': 343_008,
+    'IE': 4_992_908,
     'IT': 60_461_826,
-    'LT':  2_690_259,
-    'LU':    635_755,
-    'LV':  1_870_386,
-    'MT':    514_564,
+    'LT': 2_690_259,
+    'LU': 635_755,
+    'LV': 1_870_386,
+    'MT': 514_564,
     'NL': 17_161_189,
-    'NO':  5_449_099,
+    'NO': 5_449_099,
     'PL': 37_830_336,
     'PT': 10_175_378,
     'RO': 19_126_264,
     'SE': 10_147_405,
-    'SI':  2_080_044,
-    'SK':  5_463_818,
+    'SI': 2_080_044,
+    'SK': 5_463_818,
+}
+
+list_topics = {
+    'Fièvre': '/m/0cjf0',
+    'Mal de gorge': '/m/0b76bty',
+    'Dyspnée': '/m/01cdt5',
+    'Agueusie': '/m/05sfr2',
+    'Anosmie': '/m/0m7pl',
+    'Virus': '/m/0g9pc',
+    'Épidémie': '/m/0hn9s',
+    'Symptôme': '/m/01b_06',
+    'Thermomètre': '/m/07mf1',
+    'Grippe espagnole': '/m/01c751',
+    'Paracétamol': '/m/0lbt3',
+    'Respiration': '/m/02gy9_',
+    'Toux': '/m/01b_21'
 }
 
 
@@ -458,7 +474,8 @@ def create_df_trends(url_trends: str, list_topics: Dict[str, str], geo: Dict[str
                 df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8")), parse_dates=['date'],
                                         date_parser=date_parser).rename(columns={"date": "DATE"})
             else:
-                df_trends = pd.read_csv(path, parse_dates=['date'], date_parser=date_parser).rename(columns={"date": "DATE"})
+                df_trends = pd.read_csv(path, parse_dates=['date'], date_parser=date_parser).rename(
+                    columns={"date": "DATE"})
             df_trends['LOC'] = k
             df_trends.rename(columns=renaming, inplace=True)
             df_trends.set_index(['LOC', 'DATE'], inplace=True)
@@ -472,7 +489,7 @@ def world_adjacency_list(alpha: int = 3) -> List[Tuple[str, str]]:
     :param alpha: iso code to use. Must be in [2, 3]
     :return list of adjacent countries. Neighboring is listed only once, not twice.
     """
-    #df = pd.read_csv("https://raw.githubusercontent.com/geodatasource/country-borders/master/GEODATASOURCE-COUNTRY-BORDERS.CSV").dropna()
+    # df = pd.read_csv("https://raw.githubusercontent.com/geodatasource/country-borders/master/GEODATASOURCE-COUNTRY-BORDERS.CSV").dropna()
     df = pd.read_csv("../data/country_borders.csv").dropna()
     adj_list = []
     for idx, row in df.iterrows():
@@ -531,12 +548,12 @@ def region_merge_iterator(init_regions: List[str], nb_merge: int, adj: List[Tupl
     """
     if adj:
         G = nx.Graph(adj)
-    for merge in range(2, nb_merge+1):
+    for merge in range(2, nb_merge + 1):
         for elem in itertools.combinations(init_regions, merge):
             if adj:  # check if the region candidate can be formed
                 connected = [False for _ in range(len(elem))]
                 for i, node_a in enumerate(elem):
-                    for j, node_b in enumerate(elem[i+1:]):
+                    for j, node_b in enumerate(elem[i + 1:]):
                         if G.has_edge(node_a, node_b):
                             connected[i] = True
                             connected[i + j + 1] = True
@@ -571,8 +588,8 @@ class DataGenerator:
 
         :param df: dataframe of values to use in order to generate X and Y. Must be double indexed by loc and date
         :param n_samples: number of timesteps in X
-        :param n_forecast: number of timesteps in Y.
-        :param target: target to predict, will be come the Y set
+        :param n_forecast: number of timesteps in Y. If == 0, no target is set
+        :param target: target to predict, will become the Y set. If == '', no target is set
         :param scaler_generator: generator of scaler to use
         :param scaler_type: one of "batch", "window", "whole"
         :param no_scaling: list of features that must not be scaled
@@ -594,10 +611,6 @@ class DataGenerator:
         # add lag to the data to be able to reshape correctly
         df = deepcopy(df)
         dummy_df = next(iter(df.values()))
-        if target in data_columns:
-            self.target_idx = data_columns.index(target)
-        else:
-            self.target_idx = None  # the target is not in the data columns, no need to specify it
         self.nb_loc = len(df)
         init_columns = list(dummy_df.columns)
         if data_columns is None:
@@ -605,6 +618,13 @@ class DataGenerator:
             data_columns = init_columns  # all columns are considered to be data columns
         else:
             self.n_features = len(data_columns)
+        if target in data_columns:
+            self.target_idx = data_columns.index(target)
+        else:
+            self.target_idx = None  # the target is not in the data columns, no need to specify it
+
+        # handle data generator without target
+        self.no_target = target == '' or n_forecast == 0  # no target specified
 
         # pad the values: add 0 at the beginning and at the end
         smallest_dates = {}
@@ -624,7 +644,8 @@ class DataGenerator:
                 loc_padded_idx = np.array(range(len(date_range)))
                 nb_point = len(date_range)
                 zeros = np.zeros(nb_point)
-                pad_before = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]}, **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
+                pad_before = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]},
+                                           **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
                 df[k] = pad_before.append(df[k])
             else:
                 loc_padded_idx = np.array([])
@@ -633,7 +654,8 @@ class DataGenerator:
                 loc_padded_idx = np.append(loc_padded_idx, range(len(df[k]), len(df[k]) + len(date_range)))
                 nb_point = len(date_range)
                 zeros = np.zeros(nb_point)
-                pad_after = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]}, **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
+                pad_after = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]},
+                                          **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
                 df[k] = df[k].append(pad_after)
             else:
                 pass
@@ -649,11 +671,14 @@ class DataGenerator:
                 augment_feature_no_pop = [col for col in init_columns if col not in augment_feature_pop]
             for region_list in region_merge_iterator([loc for loc in df], augment_merge, augment_adjacency):
                 region_code = '-'.join(sorted(set(region_list)))
-                df[region_code] = sum([df[k][augment_feature_no_pop].reset_index().drop(columns=['LOC']).set_index('DATE') for k in region_list])
+                df[region_code] = sum(
+                    [df[k][augment_feature_no_pop].reset_index().drop(columns=['LOC']).set_index('DATE') for k in
+                     region_list])
                 if augment_feature_pop:
                     sum_pop = sum([augment_population[k] for k in region_list])
-                    df[region_code][augment_feature_pop] = sum([df[k][augment_feature_pop].reset_index().drop(columns=["LOC"]).
-                                                               set_index('DATE') * augment_population[k] for k in region_list]) / sum_pop
+                    df[region_code][augment_feature_pop] = sum(
+                        [df[k][augment_feature_pop].reset_index().drop(columns=["LOC"]).
+                        set_index('DATE') * augment_population[k] for k in region_list]) / sum_pop
 
                 df[region_code]['LOC'] = region_code
                 df[region_code] = df[region_code].reset_index().set_index(['LOC', 'DATE'])
@@ -661,7 +686,8 @@ class DataGenerator:
                 self.loc_augmented[region_code] = "Augmented region"
 
                 if len(region_list) == 2:
-                    self.padded_idx[region_code] = np.union1d(self.padded_idx[region_list[0]], self.padded_idx[region_list[1]])
+                    self.padded_idx[region_code] = np.union1d(self.padded_idx[region_list[0]],
+                                                              self.padded_idx[region_list[1]])
                 else:
                     self.padded_idx[region_code] = reduce(np.union1d, ([self.padded_idx[k] for k in region_list]))
         self.loc_all = {**self.loc_init, **self.loc_augmented}
@@ -676,17 +702,26 @@ class DataGenerator:
         self.target_columns = target_columns
         self.data_columns_t0 = deepcopy(data_columns)
         # name of x columns across time
-        self.data_columns = [f"{col}(t{t:+d})" for t in range(-n_samples+1, 0) for col in data_columns] + self.data_columns_t0
+        self.data_columns = [f"{col}(t{t:+d})" for t in range(-n_samples + 1, 0) for col in
+                             data_columns] + self.data_columns_t0
 
         # add lagged values
         if no_lag:  # the dataframe has already the right format
             self.df = df
             self.date_range = pd.date_range(min_date, max_date)
+            days_removed = 0  # no day as been removed
         else:  # the dataframe must be constructed across time
-            self.df = {k: add_lag(v, - n_samples).join(add_lag(v[[target]], n_forecast),
-                                                                                  how='inner') for k, v in df.items()}
-            self.date_range = pd.date_range(min_date + timedelta(days=(n_samples-1)), max_date - timedelta(days=n_forecast))
-        days_removed = n_forecast + n_samples - 1
+            if self.no_target:  # no target specified
+                self.df = {k: add_lag(v, - n_samples) for k, v in df.items()}
+                self.date_range = pd.date_range(min_date + timedelta(days=(n_samples - 1)),
+                                                max_date)
+                days_removed = n_samples - 1
+            else:  # a target exist
+                self.df = {k: add_lag(v, - n_samples).join(add_lag(v[[target]], n_forecast),
+                                                           how='inner') for k, v in df.items()}
+                self.date_range = pd.date_range(min_date + timedelta(days=(n_samples - 1)),
+                                                max_date - timedelta(days=n_forecast))
+                days_removed = n_forecast + n_samples - 1
         self.padded_idx = {k: (v - days_removed).astype(int) for k, v in self.padded_idx.items()}
 
         self.scaler_type = scaler_type  # can be "batch", "window", "whole"
@@ -707,20 +742,24 @@ class DataGenerator:
         self.idx = {}
         idx = 0
         for i, (loc, val) in enumerate(self.df.items()):
+            if not self.no_target:  # a target is specified
+                y = val[target_columns].values
+                if cumsum:
+                    y = np.cumsum(y, axis=1)
+                self.Y.append(y)
             x = val[self.data_columns].values
-            y = val[target_columns].values
-            if cumsum:
-                y = np.cumsum(y, axis=1)
             x = x.reshape((len(x), n_samples, self.n_features))
             self.X.append(x)
-            self.Y.append(y)
-            self.batch_size = len(y)
-            self.idx[loc] = np.array(range(idx, idx+self.batch_size))
+            self.batch_size = len(x)
+            self.idx[loc] = np.array(range(idx, idx + self.batch_size))
             idx += self.batch_size
             if i == 0:
                 self.relative_idx = np.array(range(0, self.batch_size))
         self.X = np.concatenate(self.X)
-        self.Y = np.concatenate(self.Y)
+        if self.no_target:
+            self.Y = None
+        else:
+            self.Y = np.concatenate(self.Y)
 
         # self.X = np.concatenate([val.values.reshape((val.shape[0], n_samples, self.n_features))[:-n_forecast] for val in self.df.values()], axis=0)
         # self.Y = np.concatenate([val[target_columns].iloc[n_forecast:] for val in self.df.values()], axis=0)
@@ -739,11 +778,25 @@ class DataGenerator:
         # if window: Dict[str, Dict[int, [Dict[int, scaler]]]]: {loc: {feature_idx: {idx: scaler}}}
         # else: Dict[str, Dict[int, scaler]]: {loc: {feature_idx: scaler}}
         if self.scaler_type == "window":  # relative index
-            self.scaler_x = {loc: {feature: {i: self.scaler_generator() for i in self.relative_idx} for feature in self.to_scale} for loc in self.idx}
-            self.scaler_y = {loc: {i: self.scaler_generator() for i in self.relative_idx} for loc in self.idx}
+            self.scaler_x = {
+                loc: {feature: {i: self.scaler_generator() for i in self.relative_idx} for feature in self.to_scale} for
+                loc in self.idx}
+            if self.no_target:
+                self.scaler_y = None
+            else:
+                self.scaler_y = {loc: {i: self.scaler_generator() for i in self.relative_idx} for loc in self.idx}
         else:
             self.scaler_x = {loc: {feature: self.scaler_generator() for feature in self.to_scale} for loc in self.idx}
-            self.scaler_y = {loc: self.scaler_generator() for loc in self.idx}
+            if self.no_target:
+                self.scaler_y = None
+            else:
+                self.scaler_y = {loc: self.scaler_generator() for loc in self.idx}
+
+    def set_scaler_values_x(self, scaler_x: Dict):
+        """
+        copies the values of a scaler dict to this scaler
+        """
+        self.scaler_x = deepcopy(scaler_x)
 
     def set_loc_init(self, loc: Dict[str, str]):
         """
@@ -773,7 +826,8 @@ class DataGenerator:
         if self.predict_one:
             dates = np.array([(self.date_range + timedelta(days=self.n_forecast)).to_pydatetime()])
         else:
-            dates = np.column_stack([(self.date_range + timedelta(days=i)).to_pydatetime() for i in range(1, self.n_forecast + 1)])
+            dates = np.column_stack(
+                [(self.date_range + timedelta(days=i)).to_pydatetime() for i in range(1, self.n_forecast + 1)])
         return dates if idx is None else dates[idx]
 
     def get_x(self, idx: Iterable = None, geo: Dict[str, str] = None, scaled=True,
@@ -809,7 +863,8 @@ class DataGenerator:
                             new = val[0, :-1, feature_idx].reshape(-1)  # add the oldest values in the first window
                             self.scaler_x[loc][feature_idx].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
                         for t in range(self.n_samples):  # apply the transformation on the feature across time
-                            val[:, t, feature_idx] = self.scaler_x[loc][feature_idx].transform(val[:, t, feature_idx].reshape((-1, 1))).reshape((1, -1))
+                            val[:, t, feature_idx] = self.scaler_x[loc][feature_idx].transform(
+                                val[:, t, feature_idx].reshape((-1, 1))).reshape((1, -1))
                     if self.scaler_type == "whole":
                         val = val[idx, :, :]
                 elif self.scaler_type == "window":
@@ -820,9 +875,11 @@ class DataGenerator:
                     for feature_idx in self.to_scale:  # transform each feature
                         for i in iterator:
                             if use_previous_scaler:
-                                val[i, :, feature_idx] = self.scaler_x[loc][feature_idx][i].transform(val[i, :, feature_idx].reshape((-1, 1))).reshape((1, -1))
+                                val[i, :, feature_idx] = self.scaler_x[loc][feature_idx][i].transform(
+                                    val[i, :, feature_idx].reshape((-1, 1))).reshape((1, -1))
                             else:
-                                val[i, :, feature_idx] = self.scaler_x[loc][feature_idx][i].fit_transform(val[i, :, feature_idx].reshape((-1, 1))).reshape((1, -1))
+                                val[i, :, feature_idx] = self.scaler_x[loc][feature_idx][i].fit_transform(
+                                    val[i, :, feature_idx].reshape((-1, 1))).reshape((1, -1))
                     val = val[idx, :, :]
             X.append(val)
         return np.concatenate(X)
@@ -868,7 +925,8 @@ class DataGenerator:
                                 old = val[:, 0]  # get the values at t+1
                                 new = val[-1, 1:]  # add the most recent values at t+2 ... t+n_forecast
                                 self.scaler_y[loc].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
-                        for t in range(val.shape[1]):  # apply the transformation on the target across time  # TODO optimize in one go
+                        for t in range(val.shape[
+                                           1]):  # apply the transformation on the target across time  # TODO optimize in one go
                             val[:, t] = self.scaler_y[loc].transform(val[:, t].reshape((-1, 1))).reshape((1, -1))
                     if self.scaler_type == "whole" and idx is not None:
                         val = val[idx, :]
@@ -887,7 +945,8 @@ class DataGenerator:
         return np.concatenate(Y)
 
     def inverse_transform_y(self, unscaled: np.array, geo: Union[str, Dict[str, str]] = None, idx: np.array = None,
-                            return_type: str = 'array') -> Union[np.array, Dict[str, pd.DataFrame], Dict[str, np.array]]:
+                            return_type: str = 'array', inverse_tranform: bool = True) -> Union[
+        np.array, Dict[str, pd.DataFrame], Dict[str, np.array]]:
         """
         inverse transform the values provided, in order to get unscaled data
         uses the last scalers used in the get_y method
@@ -899,6 +958,7 @@ class DataGenerator:
             - array: return a 2D np.array of values
             - dict_array: return a dict of {loc: np.array}
             - dict_df: return a dict of {loc: pd.DataFrame}
+        :param inverse_tranform: don't use any inverse tranform
         """
         if geo is None:
             geo = self.idx  # only the keys are needed
@@ -917,7 +977,11 @@ class DataGenerator:
             for loc in geo:
                 loc_idx = idx + offset
                 init_shape = unscaled[loc_idx, :].shape
-                val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(init_shape)
+                if inverse_tranform:
+                    val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(
+                        init_shape)
+                else:
+                    val[loc_idx, :] = unscaled[loc_idx, :]
                 offset += batch_size  # increment the offset to get the values from the next batch
                 if return_type == 'dict_df':
                     dates_used = self.date_range[idx]
@@ -929,10 +993,12 @@ class DataGenerator:
         elif self.scaler_type == "window":
             offset = 0  # current offset in the Y tensor
             batch_size = len(idx)
-            for loc in geo:
-                for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
-                    val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(unscaled[i + offset, :].reshape((-1, 1))).reshape((1, -1))
-                offset += batch_size  # increment the offset to get the values from the next batch
+            if inverse_tranform:
+                for loc in geo:
+                    for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
+                        val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(
+                            unscaled[i + offset, :].reshape((-1, 1))).reshape((1, -1))
+                    offset += batch_size  # increment the offset to get the values from the next batch
         return val if return_type == 'array' else return_df
 
     def loc_to_idx(self, loc):  # return absolute idx
@@ -978,7 +1044,8 @@ class DataGenerator:
             unpadded_idx = unpadded_idx + offset - idx[0]  # add offset inside matrix and remove first values if absent
             if return_type == 'dict_df':
                 multi_index = pd.MultiIndex.from_product([[loc], dates_used], names=['LOC', 'DATE'])
-                filtered_values[loc] = pd.DataFrame(val[unpadded_idx], columns=self.target_columns).set_index(multi_index)
+                filtered_values[loc] = pd.DataFrame(val[unpadded_idx], columns=self.target_columns).set_index(
+                    multi_index)
             else:
                 filtered_values[loc] = val[unpadded_idx]
             offset += batch_size
@@ -1020,19 +1087,27 @@ class DataGenerator:
 
 class TestDataGenerator(unittest.TestCase):
 
-    def test_normalisation_x(self):
-        """
-        test if X is normalised between 0,1 when using a MinMaxScaler(0, 1)
-        """
-        date_begin = "2020-02-01"
+    def setUp(self) -> None:  # called before each test example
+        pass
 
+    @classmethod
+    def setUpClass(cls) -> None:  # called once before running the tests
+        date_begin = "2020-02-01"
         url_world = "../data/hospi/world.csv"
         url_pop = "../data/population.txt"
         population = get_world_population(url_pop)
         renaming = {v: k for k, v in european_geocodes.items()}
         geocodes = {k: v for k, v in european_geocodes.items() if population[k] > 1_000_000}
         df_hospi = hospi_world(url_world, geocodes, renaming, new_hosp=True, date_begin=date_begin)
-        scaler_generator = MinMaxScaler
+        cls.scaler_generator = MinMaxScaler
+        cls.df_hospi = df_hospi
+
+    def test_normalisation_x(self):
+        """
+        test if X is normalised between 0,1 when using a MinMaxScaler(0, 1)
+        """
+        scaler_generator = self.scaler_generator
+        df_hospi = self.df_hospi
         dg = DataGenerator(df_hospi, 20, 10, 'NEW_HOSP', scaler_generator=scaler_generator, scaler_type='batch')
         idx_begin = np.arange(100)
         X = dg.get_x(idx=idx_begin, scaled=True)
@@ -1044,10 +1119,32 @@ class TestDataGenerator(unittest.TestCase):
         self.assertEqual(1, X.max())
         self.assertEqual(0, X.min())
 
+    def test_no_target(self):
+        """
+        test if a data generator can be created without target
+        """
+        scaler_generator = self.scaler_generator
+        df_hospi = self.df_hospi
+        n_forecast = 10
+        dg_no_target = DataGenerator(df_hospi, 20, 0, 'NEW_HOSP', scaler_generator=scaler_generator, scaler_type='batch')
+        batch_size_no_target = dg_no_target.batch_size
+        dg_target = DataGenerator(df_hospi, 20, n_forecast, 'NEW_HOSP', scaler_generator=scaler_generator, scaler_type='batch')
+        batch_size_target = dg_target.batch_size
+        self.assertGreater(batch_size_no_target, batch_size_target)  # less values have been removed on a dg without target
+        self.assertEqual(batch_size_no_target, batch_size_target + n_forecast)
+        self.assertTrue(dg_no_target.no_target)
+        self.assertFalse(dg_target.no_target)
+        dg_no_target = DataGenerator(df_hospi, 20, n_forecast, '', scaler_generator=scaler_generator, scaler_type='batch')
+        batch_size_no_target = dg_no_target.batch_size
+        self.assertGreater(batch_size_no_target, batch_size_target)  # less values have been removed on a dg without target
+        self.assertEqual(batch_size_no_target, batch_size_target + n_forecast)
+        self.assertTrue(dg_no_target.no_target)
+
 
 if __name__ == "__main__":
     # -----------------------------------------------------------------------------------------------------------------------------------------------------
     # target, should be one of the hosp features
+    unittest.main()
     """
     target = 'NEW_HOSP'
 

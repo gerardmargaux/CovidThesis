@@ -50,6 +50,7 @@ def weights_assemble_table(info_file: str):
     label = 'tab:weights_assembler'
     float_format = '.02f'
     table = df_weights.to_latex(caption=caption, label=label, float_format=f'%{float_format}')
+    table = table.replace("\\begin{table}", "\\begin{table}[H]")
     tex_filename = f'{res_dir}/{info_file.replace(".txt", "")}_weights.tex'
     table = f'%{info_file.replace(".txt", "")}\n' + table
     with open(tex_filename, 'w') as file:
@@ -175,7 +176,8 @@ def walk_table(model_file: str, error: str) -> str:
         columns_shown = [col for col in df.columns if col[5] in shown_walks] + [i for i in df.columns[-3:]]
         df = df[columns_shown]
         table = df.to_latex(float_format=f'%{float_format}', caption=caption, label=label)
-        header = walk_table_assembler_header(df)
+        header = walk_table_assembler_header(df, first_walk_nb=nb_walks-1)
+        # TODO highlight table for assembly (best value amongst y^H, y^T and y)
         header_start = table.index('\\toprule') + len('\\toprule')
         header_end = table.index('\\midrule')
         table = table[:header_start] + header + table[header_end:]
