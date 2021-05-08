@@ -1077,7 +1077,10 @@ def mean_query(number: int, begin: datetime, end: datetime, topic: str, geo: str
     for k, (begin_tmp, end_tmp) in enumerate(dates_iterator(begin, end, number)):
         timeframe = dates_to_timeframe(begin_tmp, end_tmp)
         # Initialize build_payload with the word we need data for
-        tor_ip_changer.get_new_ip()
+        try:
+            current_ip = tor_ip_changer.get_new_ip()
+        except:
+            pass
         build_payload = partial(pytrends.build_payload,
                                 kw_list=[topic], cat=cat, geo=geo, gprop='')
         if verbose:
@@ -1690,7 +1693,7 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 batch_id = 0
             if not is_updated:
                 list_dates = []
-                last_length = max_query_days - overlap - nb_mean
+                last_length = max_query_days - nb_mean  # max length for the last query
 
                 while cur_end < latest_day:
                     list_dates.append((cur_begin, cur_end))
@@ -1701,11 +1704,12 @@ def actualize_trends_using_daily(geocodes: Dict[str, str],
                 if (cur_end - cur_begin).days <= last_length:  # the last query can be done safely
                     list_dates.append((cur_begin, cur_end))
                 else:  # need to split the last query into 2 sets of queries
-                    cur_end = cur_begin + timedelta(max_query_days - nb_mean)
+                    cur_end = cur_begin + timedelta(last_length)
                     list_dates.append((cur_begin, cur_end))
                     cur_begin += timedelta(days=(length - overlap))
                     cur_end = latest_day
                     list_dates.append((cur_begin, cur_end))
+
 
                 # send the queries
                 for i, (date_from, date_to) in enumerate(list_dates):
@@ -1767,7 +1771,7 @@ if __name__ == "__main__":
         'Fièvre': '/m/0cjf0',
         'Mal de gorge': '/m/0b76bty',
         'Dyspnée': '/m/01cdt5',
-        'Agueusie': '/m/05sfr2',
+        #'Agueusie': '/m/05sfr2',
         'Anosmie': '/m/0m7pl',
         'Virus': '/m/0g9pc',
         'Épidémie': '/m/0hn9s',
