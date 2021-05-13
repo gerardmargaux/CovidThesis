@@ -1,5 +1,6 @@
 # generates the examples plots written in the latex file
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 from datetime import date, datetime, timedelta
 from sklearn.linear_model import LinearRegression
@@ -9,8 +10,6 @@ import trends_query
 import time
 import random
 import pandas as pd
-from pytrends.exceptions import ResponseError
-from pytrends.request import TrendReq
 from bisect import bisect, bisect_left
 
 plot_example_dir = '../plot/examples'
@@ -25,10 +24,7 @@ color_prediction = '#ff7f0e'
 color_actual = '#2ca02c'
 steps = np.pi / 30  # steps used between 2 points
 
-
-def target_function(x):  # target used for the models
-    return (np.cos(x) + 1) / 2
-
+# ---------------- always done at the beginning and end of each figure
 
 def plt_prepare():
     plt.figure(figsize=(5, 4))
@@ -38,6 +34,12 @@ def plt_finish():
     plt.grid()
     plt.legend()
     plt.tight_layout()
+
+
+# ---------------- plot examples of predictions
+
+def target_function(x):  # target used for the models
+    return (np.cos(x) + 1) / 2
 
 
 def plot_sample_prediction(y_train, y_predicted, y_actual):
@@ -78,6 +80,8 @@ def plot_prediction_single_horizon(y_predicted, y_actual, y_train=None, horizon=
     plt.legend()
     plt.tight_layout()
 
+
+# ---------------- predictions for the reference models
 
 def plot_prediction_reference_models():  # plot the predictions on a single window
     X_values = np.arange(n_samples + n_forecast) * steps
@@ -155,6 +159,8 @@ def plot_prediction_dense_model_t_1():
     plt.savefig(f'{plot_example_dir}/prediction_dense_model_t_1', dpi=200)
 
 
+# ---------------- generate the predictions of some models
+
 def prediction_linear_regression(x_train, nb_test):
     axis = np.arange(len(x_train)).reshape(-1, 1)
     regr = LinearRegression().fit(axis, x_train)
@@ -179,17 +185,19 @@ def prediction_dense_model(X_train, Y_train, X_test, epochs=150):
     return prediction
 
 
-def plot_prediction():
+def plot_prediction():  # plot the predictions on a window
     plot_prediction_reference_models()
     plot_prediction_dense_model()
 
 
-def plot_prediction_t_1():
+def plot_prediction_t_1():  # plot the predictions for t+1
     plot_prediction_reference_models_t_1()
     plot_prediction_dense_model_t_1()
 
 
-def tor_vs_local():
+# ---------------- plot for tor
+
+def tor_vs_local():  # comparison between tor queries and local queries
     def random_timeframe():
         end_date = date(year=random.randint(2006, 2020), month=random.randint(1, 12), day=random.randint(1, 28))
         delta = timedelta(days=random.randint(8, 260))
@@ -243,7 +251,7 @@ def tor_vs_local():
         time.sleep(300)
 
 
-def plot_tor_vs_local():
+def plot_tor_vs_local():  # plot the comparison between tor queries and local queries, using stored data
     df_errors_tor = pd.read_csv(f'{dir_tor_experiments}/TorTrendsRequest_errors_4.csv')
     df_errors_local = pd.read_csv(f'{dir_tor_experiments}/LocalTrendsRequest_errors_4.csv')
     df_nb_requests_tor = pd.read_csv(f'{dir_tor_experiments}/TorTrendsRequest_nb_requests_4.csv')
@@ -292,6 +300,32 @@ def plot_tor_vs_local():
     plt.savefig(f'{plot_example_dir}/tor_vs_local_rate_4', dpi=200)
 
 
+# ---------------- plot for trends data
+
+def plot_trends(df_plot, topic_code, show=True):
+    fig = plt.figure()
+    if isinstance(df_plot, list):
+        list_df = df_plot
+    else:
+        list_df = [df_plot]
+    for df in list_df:
+        df_plot = 100 * df[[topic_code]] / df[[topic_code]].max()
+        plt.plot(df_plot, label="hourly data")
+    ax = fig.axes[0]
+    # set monthly locator
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    # set formatter
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt.grid()
+    if show:
+        plt.show()
+    return fig
+
+
 if __name__ == '__main__':
     # tor_vs_local()
     plot_tor_vs_local()
+    df = pd.read_csv('../data/trends/model/FR-B-Fièvre.csv', parse_dates=['date']).set_index('date')
+    plot_trends(df, df.columns[0])

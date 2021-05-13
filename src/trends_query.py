@@ -129,6 +129,23 @@ class TorTrendReq(TrendReq):
                 'response with code {0}.'.format(response.status_code),
                 response=response)
 
+    def GetGoogleCookie(self):
+        """
+        Gets google cookie (used for each and every proxy; once on init otherwise)
+        Removes proxy from the list on proxy error
+        """
+        proxies = {
+            'http': 'socks5h://localhost:9050',  # default port for tor
+            'https': 'socks5h://localhost:9050',
+        }
+        return dict(filter(lambda i: i[0] == 'NID', requests.get(
+                    'https://trends.google.com/?geo={geo}'.format(
+                        geo=self.hl[-2:]),
+                    timeout=self.timeout,
+                    proxies=proxies,
+                    **self.requests_args
+                ).cookies.items()))
+
 
 class TrendsRequest:  # interface to query google trends data, using a TrendReq instance
 
@@ -136,10 +153,7 @@ class TrendsRequest:  # interface to query google trends data, using a TrendReq 
         self.request_done = 0
         self.nb_exception = 0
 
-    def build_payload(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop=''):
-        raise NotImplementedError
-
-    def interest_over_time(self):
+    def get_interest_over_time(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop=''):
         raise NotImplementedError
 
     @classmethod
@@ -167,20 +181,63 @@ class LocalTrendsRequest(TrendsRequest):
     process trends using local IP address. When an error is encountered, do a time.sleep before continuing
     """
 
-    def __init__(self, max_errors, *args, **kwargs):
+    def __init__(self, max_errors, verbose=True, *args, **kwargs):
         """
         :param max_errors: max number of errors that can be processed. When max_errors errors have been caught, raise an
             error instead of sleeping the program
         """
-        self.pytrends = TrendReq()
+        self.pytrends = self.setup_pytrends()
         self.kw_list = None
         self.timeframe = None
         self.geo = None
         self.max_error = max_errors
+        self.verbose = verbose
         super().__init__(*args, **kwargs)
 
+    def setup_pytrends(self):
+        return TrendReq()
+
+    def get_interest_over_time(self, kw_list: List[str], cat: int = 0, timeframe: str = 'today 5-y', geo: str = '',
+                      gprop: str = '') -> Union[pd.DataFrame, None]:
+        """
+        get the interest over time value for a list of keywords, on a given loc and time interval. In case of error,
+        sleep and return None
+        :param kw_list:
+        :param cat:
+        :param timeframe:
+        :param geo:
+        :param gprop:
+        :return: pandas dataframe is the request succeeded and None otherwise
+        """
+        self.kw_list = kw_list
+        self.timeframe = timeframe
+        self.geo = geo
+        error_before = self.nb_exception
+        if self.verbose:
+            print(f'query on {self.geo}: {self.kw_list} for {timeframe}... ', end='')
+        function = partial(self.pytrends.build_payload, kw_list, cat, timeframe, geo, gprop)
+        res = self._handle_errors(function)
+        if self.nb_exception == error_before:
+            self.intermediate_sleep()
+        function = partial(self.pytrends.interest_over_time)
+        df = self._handle_errors(function)
+        if df is None:
+            if self.verbose:
+                print('failed')
+            return None
+        self.request_done += 1
+        if self.verbose:
+            print('retrieved')
+        if df.empty:
+            begin, end = timeframe_to_date(self.timeframe)
+            freq = 'T' if is_timeframe_hourly(self.timeframe) else 'D'
+            return TrendsRequest.zero_dataframe(self.kw_list, begin, end, freq=freq)
+        return df
+
+    '''
     def build_payload(self, kw_list: List[str], cat: int = 0, timeframe: str = 'today 5-y', geo: str = '',
                       gprop: str = ''):
+        print('payload')
         self.kw_list = kw_list
         self.timeframe = timeframe
         self.geo = geo
@@ -191,6 +248,7 @@ class LocalTrendsRequest(TrendsRequest):
             self.intermediate_sleep()
 
     def interest_over_time(self):
+        print('interest')
         function = partial(self.pytrends.interest_over_time)
         df = self._handle_errors(function)
         self.request_done += 1
@@ -199,6 +257,7 @@ class LocalTrendsRequest(TrendsRequest):
             freq = 'T' if is_timeframe_hourly(self.timeframe) else 'D'
             return TrendsRequest.zero_dataframe(self.kw_list, begin, end, freq=freq)
         return df
+    '''
 
     def _handle_errors(self, function: callable):
         """
@@ -217,10 +276,13 @@ class LocalTrendsRequest(TrendsRequest):
                 self.nb_exception += 1
                 if count_error >= self.max_error:  # too many errors have been caught, stop the collect of data
                     raise err
+                print('sleeping... ', end='')
                 self.error_sleep()
+                print('resuming. ', end='')
+                return None
 
     def intermediate_sleep(self):  # sleep between 2 requests
-        time.sleep(random.random())
+        time.sleep(1 + random.random())
 
     def error_sleep(self):
         if self.nb_exception < 3:
@@ -235,20 +297,32 @@ class TorTrendsRequest(LocalTrendsRequest):
         self.tor_ip_changer = None
         self.error_since_ip_change = 0  # errors since the last change of ip
         self.error_change_ip = 3  # number of errors that must be reached in order to change ip (with a certain prob.)
+        self.reset(True)
         super().__init__(*args, **kwargs)
-        self.reset()
 
-    def reset(self):  # set a new TorTrendReq instance and a new tor_ip_changer (with a new ip address)
-        self.pytrends = TorTrendReq()
+    def reset(self, first=False):  # set a new TorTrendReq instance and a new tor_ip_changer (with a new ip address)
         self.tor_ip_changer = TorIpChanger(tor_password='my password', tor_port=9051,
-                                           local_http_proxy='127.0.0.1:8118', new_ip_max_attempts=30)
-        self.get_new_ip()
+                                           local_http_proxy='127.0.0.1:8118', new_ip_max_attempts=30, reuse_threshold=0)
+        if not first:
+            self.get_new_ip()
+
+    def setup_pytrends(self):
+        return self.get_new_ip()
 
     def get_new_ip(self):  # get a new ip address for tor and print it
-        self.tor_ip_changer.get_new_ip()
-        self.error_since_ip_change = 0
-        time.sleep(1)
-        print(f'tor ip = {self.current_tor_ip()}')
+        running = True
+        pytrends = None
+        while running:
+            try:
+                self.tor_ip_changer.get_new_ip()
+                self.error_since_ip_change = 0
+                time.sleep(1)
+                print(f'tor ip for next requests = {self.current_tor_ip()}. ', end='')
+                pytrends = TorTrendReq()
+                running = False
+            except (exceptions.ResponseError, ReadTimeout, ConnectTimeout) as err:
+                pass
+        return pytrends
 
     def _handle_errors(self, function: callable):
         """
@@ -267,20 +341,24 @@ class TorTrendsRequest(LocalTrendsRequest):
                     count_error += 1
                     self.nb_exception += 1
                     self.error_since_ip_change += 1
+                    if count_error >= self.max_error:
+                        raise err
+                    print('sleeping...', end='')
+                    self.error_sleep()
+                    print('resuming', end='')
                     # certain probability of changing ip. The ip is not changed at every error caught in order to fool
                     # google trends
                     if random.randint(self.error_since_ip_change, self.error_since_ip_change + 2) >= self.error_change_ip:
                         self.get_new_ip()
-                    if count_error >= self.max_error:
-                        raise err
-                    self.error_sleep()
+                    return None
             except TorIpError as err:  # error with tor, set a new tor ip changer
                 count_error += 1
                 self.nb_exception += 1
-                self.reset()
                 if count_error >= self.max_error:
                     raise err
                 self.error_sleep()
+                self.reset()
+                return None
 
     @classmethod
     def current_tor_ip(cls) -> str:  # return the current ip used by tor
@@ -320,6 +398,32 @@ class FakeTrendsRequest(TrendsRequest):  # for testing purposes, use fake trends
         self.begin, self.end = timeframe_to_date(timeframe)
         self.geo = geo
         self.kw_list = kw_list
+
+    def get_interest_over_time(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop=''):
+        self.begin, self.end = timeframe_to_date(timeframe)
+        self.geo = geo
+        self.kw_list = kw_list
+        if self.begin is None:
+            return KeyError  # pytrends behavior
+        delta = self.end - self.begin
+        if delta.days > max_query_days:
+            freq = timedelta(days=7)
+        elif delta.days > 7:
+            freq = 'D'
+        else:
+            freq = 'H'
+        for date in self.errors:  # check if the request should be valid or not
+            if self.begin <= date <= self.end:
+                return self.zero_dataframe(self.kw_list, self.begin, self.end, freq=freq)
+        index = pd.date_range(start=self.begin, end=self.end, freq=freq, name='date')
+        data = {'isPartial': [False for _ in range(len(index))]}
+        for kw in self.kw_list:
+            values = np.random.randint(0, 99, len(index))
+            index_100 = np.random.randint(len(index))
+            values[index_100] = 100
+            data[kw] = values
+        df = pd.DataFrame(data=data, index=index)
+        return df
 
     def interest_over_time(self):
         if self.begin is None:
@@ -396,11 +500,9 @@ class QueryBatch:
     def max_len(cls) -> int:  # max number of data points that can be queried with one request of this type
         raise NotImplementedError
 
-    def fetch_data(self, timeframe: str, verbose=True) -> pd.DataFrame:  # fetch google trends data
-        if verbose:
-            print(f'query on {self.geo}: {self.kw} for {timeframe}')
-        self.trends_request.build_payload([self.kw], cat=self.cat, timeframe=timeframe, geo=self.geo, gprop=self.gprop)
-        return self.trends_request.interest_over_time()
+    def fetch_data(self, timeframe: str) -> pd.DataFrame:  # fetch google trends data
+        df = self.trends_request.get_interest_over_time([self.kw], cat=self.cat, timeframe=timeframe, geo=self.geo, gprop=self.gprop)
+        return df
 
     def get_df(self) -> pd.DataFrame:  # get the dataframe for this query batch, with a batch_id column
         df = self.df
@@ -458,6 +560,8 @@ class DailyQueryBatch(QueryBatch):
         begin, end = self.list_dates[self.date_idx]
         timeframe = dates_to_timeframe(begin, end, hours=False)
         df = self.fetch_data(timeframe)
+        if df is None:  # the request could not be fetched
+            return False
         df = df[self.begin:self.end]
         if 100 not in df[self.kw]:
             self.df[f'{self.kw}_{self.date_idx}'] = df[self.kw] * 100 / df[self.kw].max()
@@ -559,8 +663,7 @@ class DailyGapQuery(DailyQueryBatch):  # daily query batch meant to be used on a
     def __call__(self, *args, **kwargs) -> bool:
         finished = super().__call__(*args, **kwargs)
         if finished and self.savefile:
-            pass
-            # self.to_csv()
+            self.to_csv()
         return finished
 
     def to_csv(self):
@@ -570,7 +673,8 @@ class DailyGapQuery(DailyQueryBatch):  # daily query batch meant to be used on a
 class HourlyQueryBatch(QueryBatch):  # query batch using a hourly interval
 
     def __init__(self, kw: str, geo: str, trends_request: TrendsRequest, begin: Union[datetime, date],
-                 end: Union[datetime, date], batch_id: int, cat: int = 0, number: int = 1, gprop: str = ''):
+                 end: Union[datetime, date], batch_id: int, cat: int = 0, number: int = 1, gprop: str = '', *args,
+                 **kwargs):
         """
         process a daily google trends query on a single batch
         :param kw: keyword to process
@@ -599,7 +703,14 @@ class HourlyQueryBatch(QueryBatch):  # query batch using a hourly interval
 
     def __call__(self, *args, **kwargs) -> bool:
         if self.df.empty:
-            self.df = self.fetch_data(self.timeframe).drop(columns=['isPartial'])
+            df = self.fetch_data(self.timeframe)
+            if df is None:  # the request could not be fetched
+                return False
+            self.df = df.drop(columns=['isPartial'])
+            if sum(self.df.index.minute):
+                # if the dataframe was not given as hourly (for instance minute dataframe), resample it to daily data
+                self.df = self.df.resample('H').mean()
+                print(f'resampling data on {self.timeframe} to hourly data')
             # check if the dataframe is valid or not. if not, a negative batch id is set
             # a valid batch must have at least more than 3 values above 10
             if len(np.where(self.df[self.kw] > 10)[0]) <= 3:
@@ -636,7 +747,7 @@ class Query:
         self.geo = geo
         self.trends_request = trends_request
         self.begin = begin
-        self.end = end
+        self.end = min(end, query_batch.latest_day_available())
         self.directory = directory
         self.overlap = overlap
         self.cat = cat
@@ -676,14 +787,13 @@ class Query:
                 df_a = self.df[abs(self.df['batch_id']) < batch_id]
                 df_b = self.df[abs(self.df['batch_id']) > batch_id]
                 self.df = pd.concat([df_a, df, df_b])
+                if self.savefile:  # save to csv
+                    self.to_csv()
             if self.shuffle:
                 self.list_new_requests.pop(idx)
             else:
                 self.list_new_requests = self.list_new_requests[1:]
             if not self.list_new_requests:  # no more requests must be done
-                # save to csv
-                if self.savefile:
-                    self.to_csv()
                 return True
         return False
 
@@ -758,13 +868,12 @@ class Query:
                 df = df.set_index(df.index.date, drop=True)
             valid_df = [df]
             batch_id += 1
-            last_covered = None
             delta_1 = self.time_delta(1)
             for df_left, df_right in zip(df_covered, df_covered[1:]):
                 intersection = len(df_left.index.intersection(df_right.index - delta_1))
                 if intersection > 0 and (df_right.iloc[0]['batch_id'] < 0 or df_left.iloc[0]['batch_id'] < 0):
-                    # one of the two batches was invalid and no need to query between them
-                    last_covered = df_left.index.max()
+                    # one of the two batches was invalid and no need to query between them, as only errors would happen
+                    pass
                 elif intersection < self.overlap:
                     # queries should be done between the 2 dataframes
                     dates = self.dates_interval_batches(df_left.index.max() - self.delta_overlap,
@@ -774,9 +883,8 @@ class Query:
                                                                        begin, end, batch_id, self.cat,
                                                                        self.number, self.gprop, shuffle=self.shuffle))
                         batch_id += 1
-                        last_covered = end
-                else:
-                    last_covered = df_left.index.max()
+                else:  # the batches and their intersection is valid
+                    pass
                 df = df_right
                 # keep the sign in case the batch id was negative
                 df['batch_id'] = np.sign(df.iloc[0]['batch_id']) * batch_id
@@ -786,12 +894,12 @@ class Query:
                 batch_id += 1
             # append end if needed
             if df_covered[-1].index.max() < self.end:  # new queries must be made
-                if last_covered is None:  # there was only one existing dataframe, no need to drop it
+                if len(df_covered) == 1:  # there was only one existing dataframe, no need to drop it
                     dates_end = self.dates_interval_batches(df_covered[-1].index.max() - self.delta_overlap, self.end)
                 else:
                     valid_df.pop()  # remove the last dataframe
                     batch_id -= 1
-                    dates_end = self.dates_interval_batches(last_covered - self.delta_overlap, self.end)
+                    dates_end = self.dates_interval_batches(valid_df[-1].index.max() - self.delta_overlap, self.end)
                 for begin, end in dates_end:
                     self.list_new_requests.append(self.query_batch(self.topic_code, self.geo, self.trends_request,
                                                                    begin, end, batch_id, self.cat,
@@ -1023,7 +1131,8 @@ class DailyGapQueryList(QueryList):
                             break
                     if to_remove:
                         self.files_remove.append(existing_files[i])
-                for begin, end in dates_actualize:
+                min_dates = self.find_min_dates_queries(dates_actualize, self.number)
+                for begin, end in min_dates:
                     yield DailyGapQuery(topic_name, topic_code, geo_code, self.trends_request, self.directory, begin,
                                         end, 0, self.cat, self.number, self.gprop, shuffle=self.shuffle,
                                         savefile=self.savefile)
@@ -1226,7 +1335,6 @@ class ModelData:  # base class used to generate model data
                     list_scaled_df.append(scaled_df)
                 scaled_df = pd.DataFrame()
                 continue
-
             batch_df = df[df["batch_id"] == j].drop(columns=["batch_id"])
             index_overlap = scaled_df.index.intersection(batch_df.index)
             overlap_hours = len(index_overlap)
@@ -1291,12 +1399,11 @@ class HourlyModelData(ModelData):
             for filename in filenames:
                 try:
                     search_obj = re.match('([^_]*)-([^-_]*).csv', filename)
+                    if search_obj is None:
+                        continue
                     geo, topic_name = search_obj.group(1), search_obj.group(2)
                     if self.geo and self.topics and ((geo not in self.geo) or (topic_name not in self.topics)):
                         continue
-                    print(filename)
-                    if filename == 'FR-P-Coronavirus.csv':
-                        print('ok')
                     df_hourly = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
                                          date_parser=date_parser_hourly).set_index('date')
                     topic_code = df_hourly.columns[-2]
@@ -1467,20 +1574,21 @@ def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str,
 
     trend_request = LocalTrendsRequest(max_errors=5)  # use local queries for the beginning
     begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
-    end = datetime.today()
+    end = datetime.strptime('2020-05-09T23', hour_format)
     if daily:
-        query_list = DailyQueryList(topics, geo, trend_request, begin, end, number=10, savefile=False)
+        query_list = DailyQueryList(topics, geo, trend_request, begin, end, number=10, savefile=True)
     else:
-        query_list = HourlyQueryList(topics, geo, trend_request, begin, end, number=1, savefile=False)
+        query_list = HourlyQueryList(topics, geo, trend_request, begin, end, number=1, savefile=True)
     finished = False
     while not finished:
         try:
             finished = query_list()
         except:  # trend_request failed, using tor for the remaining requests
+            print('using tor')
             trend_request = TorTrendsRequest(max_errors=np.inf)
             query_list.set_trends_request(trend_request)
     if not daily and gap:  # queries on the gap
-        query_list = DailyGapQueryList(topics, geo, trend_request, begin, end, number=20, savefile=False)
+        query_list = DailyGapQueryList(topics, geo, trend_request, begin, end, number=20, savefile=True)
         finished = False
         while not finished:
             try:
@@ -1490,18 +1598,21 @@ def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str,
                 query_list.set_trends_request(trend_request)
 
 
-def generate_model_data(daily: bool=True):
+def generate_model_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str, str]=None):
     """
     generate model data
     :param daily: whether to generate the model data using the daily method or not
     :return: None. save the results to the data/trends/model folder
     """
     if daily:
-        model_data = DailyModelData()
+        model_data = DailyModelData(topics, geo)
     else:
-        model_data = HourlyModelData()
+        model_data = HourlyModelData(topics, geo)
     model_data.generate_model_data()
 
 
 if __name__ == '__main__':
-    generate_model_data()
+    topics = util.list_topics
+    geo = util.french_region_and_be
+    collect_data(False, topics, geo, False)
+    # generate_model_data(False, topics, geo)

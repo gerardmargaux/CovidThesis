@@ -620,8 +620,14 @@ class DataGenerator:
             self.n_features = len(data_columns)
         if target in data_columns:
             self.target_idx = data_columns.index(target)
+            # TODO use option with cumsum
+            if not cumsum:
+                self.target_in_x = True
+            else:
+                self.target_in_x = False
         else:
             self.target_idx = None  # the target is not in the data columns, no need to specify it
+            self.target_in_x = False
 
         # handle data generator without target
         self.no_target = target == '' or n_forecast == 0  # no target specified
@@ -859,8 +865,18 @@ class DataGenerator:
                     # transform each feature
                     for feature_idx in self.to_scale:
                         if not use_previous_scaler:
+                            if self.target_in_x and feature_idx == self.target_idx:
+                                # need to add the values of y as well for the scaling
+                                y_val = self.Y[self.idx[loc], :]
+                                if self.scaler_type == "whole":
+                                    y_val = y_val[-1, :]
+                                else:
+                                    y_val = y_val[idx[-1], :]
+                            else:
+                                y_val = []
                             old = val[:, -1, feature_idx].reshape(-1)  # get the values at t=0 on each window
                             new = val[0, :-1, feature_idx].reshape(-1)  # add the oldest values in the first window
+                            new = np.append(new, y_val)
                             self.scaler_x[loc][feature_idx].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
                         for t in range(self.n_samples):  # apply the transformation on the feature across time
                             val[:, t, feature_idx] = self.scaler_x[loc][feature_idx].transform(
@@ -922,7 +938,17 @@ class DataGenerator:
                             if repeated_values or self.cumsum:
                                 self.scaler_y[loc].fit(val.reshape((-1, 1)))  # fit the scaler
                             else:
+                                if self.target_in_x:
+                                    # need to add the values stored in x
+                                    x_val = self.X[self.idx[loc], :, self.target_idx]
+                                    if self.scaler_type == "whole":
+                                        x_val = x_val[0, :]
+                                    else:
+                                        x_val = x_val[idx[0], :]
+                                else:
+                                    x_val = []
                                 old = val[:, 0]  # get the values at t+1
+                                old = np.append(old, x_val)
                                 new = val[-1, 1:]  # add the most recent values at t+2 ... t+n_forecast
                                 self.scaler_y[loc].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
                         for t in range(val.shape[
@@ -966,7 +992,9 @@ class DataGenerator:
             geo = {geo: self.idx[geo]}
         if idx is None or self.scaler_type != "batch":  # the scaler_type must be 'whole' or 'window'
             idx = self.relative_idx
+            idx_dates = np.array(idx)
         else:
+            idx_dates = np.array(idx)
             idx = np.array(range(len(idx)))
 
         val = np.zeros(unscaled.shape)
@@ -984,7 +1012,7 @@ class DataGenerator:
                     val[loc_idx, :] = unscaled[loc_idx, :]
                 offset += batch_size  # increment the offset to get the values from the next batch
                 if return_type == 'dict_df':
-                    dates_used = self.date_range[idx]
+                    dates_used = self.date_range[idx_dates]
                     multi_index = pd.MultiIndex.from_product([[loc], dates_used], names=['LOC', 'DATE'])
                     return_df[loc] = pd.DataFrame(val[loc_idx, :], columns=self.target_columns).set_index(
                         multi_index)
