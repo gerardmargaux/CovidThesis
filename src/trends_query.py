@@ -243,7 +243,7 @@ class LocalTrendsRequest(TrendsRequest):
             print('retrieved')
         if df.empty:
             begin, end = timeframe_to_date(self.timeframe)
-            freq = 'T' if is_timeframe_hourly(self.timeframe) else 'D'
+            freq = 'H' if is_timeframe_hourly(self.timeframe) else 'D'
             return TrendsRequest.zero_dataframe(self.kw_list, begin, end, freq=freq)
         return df
 
@@ -858,8 +858,7 @@ class Query:
         return list_dates
 
     def list_dates(self) -> List[Tuple[datetime, datetime]]:  # list of dates used on each batch
-        a = self.dates_interval_batches(self.begin, self.end)
-        return a
+        return self.dates_interval_batches(self.begin, self.end)
 
     def prepare_query(self):
         """
@@ -1707,7 +1706,7 @@ class MinimalModelData(ModelData):
                     model = ModelData.merge_trends_batches(model, list_df_hourly[0], topic_code)
                     filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
                     model.to_csv(filename)
-                except (KeyError, AttributeError, ValueError):
+                except (KeyError, AttributeError, ValueError, IndexError):
                     print(f'error when generating model data for {filename}')
                     if end is not None:
                         print('Generating zero dataframe instead')
