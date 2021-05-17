@@ -211,7 +211,8 @@ list_topics = {
     'Grippe espagnole': '/m/01c751',
     'Paracétamol': '/m/0lbt3',
     'Respiration': '/m/02gy9_',
-    'Toux': '/m/01b_21'
+    'Toux': '/m/01b_21',
+    'PCR': '/m/05w_j',
 }
 
 
@@ -971,7 +972,7 @@ class DataGenerator:
         return np.concatenate(Y)
 
     def inverse_transform_y(self, unscaled: np.array, geo: Union[str, Dict[str, str]] = None, idx: np.array = None,
-                            return_type: str = 'array', inverse_tranform: bool = True) -> Union[
+                            return_type: str = 'array', inverse_transform: bool = True) -> Union[
         np.array, Dict[str, pd.DataFrame], Dict[str, np.array]]:
         """
         inverse transform the values provided, in order to get unscaled data
@@ -984,7 +985,7 @@ class DataGenerator:
             - array: return a 2D np.array of values
             - dict_array: return a dict of {loc: np.array}
             - dict_df: return a dict of {loc: pd.DataFrame}
-        :param inverse_tranform: don't use any inverse tranform
+        :param inverse_transform: don't use any inverse transform
         """
         if geo is None:
             geo = self.idx  # only the keys are needed
@@ -1005,7 +1006,7 @@ class DataGenerator:
             for loc in geo:
                 loc_idx = idx + offset
                 init_shape = unscaled[loc_idx, :].shape
-                if inverse_tranform:
+                if inverse_transform:
                     val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(
                         init_shape)
                 else:
@@ -1021,7 +1022,7 @@ class DataGenerator:
         elif self.scaler_type == "window":
             offset = 0  # current offset in the Y tensor
             batch_size = len(idx)
-            if inverse_tranform:
+            if inverse_transform:
                 for loc in geo:
                     for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
                         val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(

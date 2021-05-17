@@ -2,7 +2,7 @@ from pytrends.request import TrendReq
 from pytrends import exceptions
 from toripchanger import TorIpChanger
 from toripchanger.exceptions import TorIpError
-from requests.exceptions import ReadTimeout, ConnectTimeout
+from requests.exceptions import ReadTimeout, ConnectTimeout, ConnectionError
 import pandas as pd
 import os.path
 from datetime import date, datetime, timedelta
@@ -23,10 +23,16 @@ import util
 dir_daily = "../data/trends/collect_daily"
 dir_daily_gap = "../data/trends/collect_gap"
 dir_hourly = "../data/trends/collect"
+dir_min_hourly = "../data/trends/collect_minimal/hourly"
+dir_min_daily = "../data/trends/collect_minimal/daily"
 dir_model = "../data/trends/model"
 day_format = '%Y-%m-%d'
 hour_format = '%Y-%m-%dT%H'
 max_query_days = 269
+
+
+def date_to_datetime(x):
+    return datetime(x.year, x.month, x.day) if isinstance(x, date) else x
 
 
 def date_parser_daily(x):
@@ -195,7 +201,14 @@ class LocalTrendsRequest(TrendsRequest):
         super().__init__(*args, **kwargs)
 
     def setup_pytrends(self):
-        return TrendReq()
+        while True:
+            try:
+                pytrends = TrendReq()
+                return pytrends
+            except ConnectionError as err:
+                self.nb_exception += 1
+                if self.nb_exception >= self.max_error:  # too many errors have been caught, stop the collect of data
+                    raise err
 
     def get_interest_over_time(self, kw_list: List[str], cat: int = 0, timeframe: str = 'today 5-y', geo: str = '',
                       gprop: str = '') -> Union[pd.DataFrame, None]:
@@ -266,15 +279,14 @@ class LocalTrendsRequest(TrendsRequest):
         :return: result of the function
         """
         fetched = False
-        count_error = 0
         while not fetched:
             try:
                 result = function()
                 return result
-            except (exceptions.ResponseError, ReadTimeout, ConnectTimeout) as err:
-                count_error += 1
+            except (exceptions.ResponseError, ConnectionError, ReadTimeout, ConnectTimeout) as err:
+                print('exception')
                 self.nb_exception += 1
-                if count_error >= self.max_error:  # too many errors have been caught, stop the collect of data
+                if self.nb_exception >= self.max_error:  # too many errors have been caught, stop the collect of data
                     raise err
                 print('sleeping... ', end='')
                 self.error_sleep()
@@ -282,7 +294,7 @@ class LocalTrendsRequest(TrendsRequest):
                 return None
 
     def intermediate_sleep(self):  # sleep between 2 requests
-        time.sleep(1 + random.random())
+        time.sleep(random.uniform(1, 2 + self.nb_exception))
 
     def error_sleep(self):
         if self.nb_exception < 3:
@@ -382,11 +394,12 @@ class TorTrendsRequest(LocalTrendsRequest):
 
 class FakeTrendsRequest(TrendsRequest):  # for testing purposes, use fake trends
 
-    def __init__(self, errors: List[datetime] = None, *args, **kwargs):
+    def __init__(self, errors: List[datetime] = None, verbose: bool = True, *args, **kwargs):
         """
         :param errors: list of dates for which the query should return a dataframe filled with zeros
         """
         super().__init__(*args, **kwargs)
+        self.verbose = verbose
         self.kw_list = []
         self.geo = ''
         self.begin = None
@@ -403,6 +416,8 @@ class FakeTrendsRequest(TrendsRequest):  # for testing purposes, use fake trends
         self.begin, self.end = timeframe_to_date(timeframe)
         self.geo = geo
         self.kw_list = kw_list
+        if self.verbose:
+            print(f'query on {self.geo}: {self.kw_list} for {timeframe}')
         if self.begin is None:
             return KeyError  # pytrends behavior
         delta = self.end - self.begin
@@ -422,7 +437,7 @@ class FakeTrendsRequest(TrendsRequest):  # for testing purposes, use fake trends
             index_100 = np.random.randint(len(index))
             values[index_100] = 100
             data[kw] = values
-        df = pd.DataFrame(data=data, index=index)
+        df = pd.DataFrame(data={**data, 'date': index}).set_index('date')
         return df
 
     def interest_over_time(self):
@@ -787,8 +802,8 @@ class Query:
                 df_a = self.df[abs(self.df['batch_id']) < batch_id]
                 df_b = self.df[abs(self.df['batch_id']) > batch_id]
                 self.df = pd.concat([df_a, df, df_b])
-                if self.savefile:  # save to csv
-                    self.to_csv()
+            if self.savefile:  # save to csv
+                self.to_csv()
             if self.shuffle:
                 self.list_new_requests.pop(idx)
             else:
@@ -804,8 +819,15 @@ class Query:
         :param begin: beginning of the interval to query
         :param end: end of the interval to query
         """
+        if type(begin) is date:
+            cur_begin = date_to_datetime(begin)
+        else:
+            cur_begin = deepcopy(begin)
+        if type(end) is date:
+            end = date_to_datetime(end)
+
         latest_day = min(self.query_batch.latest_day_available(), end)
-        cur_begin = deepcopy(begin)
+
         # max lag used by dates iterator if every date can be queried
         max_lag_left = np.floor(np.sqrt(self.number - 1))  # max left lag
         max_lag_right = np.floor(np.sqrt(self.number - max_lag_left - 1))  # max right lag
@@ -836,7 +858,8 @@ class Query:
         return list_dates
 
     def list_dates(self) -> List[Tuple[datetime, datetime]]:  # list of dates used on each batch
-        return self.dates_interval_batches(self.begin, self.end)
+        a = self.dates_interval_batches(self.begin, self.end)
+        return a
 
     def prepare_query(self):
         """
@@ -864,8 +887,8 @@ class Query:
             # append in middle if needed
             df = df_covered[0]
             df['batch_id'] = batch_id
-            if self.freq == 'D':
-                df = df.set_index(df.index.date, drop=True)
+            #if self.freq == 'D':
+            #    df = df.set_index(df.index.date, drop=True)
             valid_df = [df]
             batch_id += 1
             delta_1 = self.time_delta(1)
@@ -888,8 +911,8 @@ class Query:
                 df = df_right
                 # keep the sign in case the batch id was negative
                 df['batch_id'] = np.sign(df.iloc[0]['batch_id']) * batch_id
-                if self.freq == 'D':
-                    df = df.set_index(df.index.date, drop=True)
+                #if self.freq == 'D':
+                #    df = df.set_index(df.index.date, drop=True)
                 valid_df.append(df)
                 batch_id += 1
             # append end if needed
@@ -1069,7 +1092,7 @@ class QueryList:  # handle a list of queries
             query.set_trends_request(trends_request)
 
 
-class DailyQueryList(QueryList):
+class DailyQueryList(QueryList):  # query using the daily method
 
     def __init__(self, topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
                  begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 30, number: int = 2,
@@ -1078,7 +1101,7 @@ class DailyQueryList(QueryList):
                          cat, gprop, savefile, shuffle)
 
 
-class HourlyQueryList(QueryList):
+class HourlyQueryList(QueryList):  # query using the hourly method
 
     def __init__(self, topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
                  begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 15, number: int = 1,
@@ -1146,8 +1169,7 @@ class DailyGapQueryList(QueryList):
         for filename in self.files_remove:
             file = f'{self.directory}/{filename}'
             if os.path.exists(file):
-                pass
-                # os.remove(file)
+                os.remove(file)
 
     @staticmethod
     def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_daily: List[pd.DataFrame],
@@ -1251,6 +1273,81 @@ class DailyGapQueryList(QueryList):
             return best_dates
 
 
+class MinimalQueryList(QueryList):
+    """
+    list of queries using the minimal number of requests.
+    No mean, only one max daily query is used for retrieving a new topic
+    New data is then actualized using hourly queries
+    """
+
+    def __init__(self, topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
+                 begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 30, number: int = 1,
+                 cat: int = 0, gprop: str = '', savefile: bool = True, shuffle: bool = True):
+        self.directory_hourly = dir_min_hourly
+        self.query_hourly = HourlyQuery
+        self.overlap_hourly_daily = 6  # overlap used for daily to hourly requests
+        self.overlap_hourly = 15  # overlap used between 2 hourly requests
+        self.part = 'daily'  # switch to 'hourly' once all daily requests have been processed
+        super().__init__(topics, geo, dir_min_daily, trends_request, begin, end, DailyQuery, query_limit, overlap,
+                         number, cat, gprop, savefile, shuffle)
+
+    def __call__(self, *args, **kwargs) -> bool:
+        result = super().__call__()
+        if result and self.part == 'daily':  # the last daily query has been done, processing for hourly queries
+            self.query = self.query_hourly
+            self.growth_iterator = self.growth_list_iterator_hourly()
+            self.part = 'hourly'
+            self.status = 'running'
+            return False
+        else:
+            return result
+
+    def growth_list_iterator(self) -> Iterator[Query]:
+        """
+        iterator used for the daily requests
+        """
+        self.status = 'running'
+        for topic_name, topic_code in self.topics.items():
+            for geo_code, geo_name in self.geo.items():
+                filename = f'{self.directory_hourly}/{geo_code}-{topic_name}.csv'
+                if os.path.exists(filename):
+                    df_hourly = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_hourly).set_index(
+                        'date')
+                    # first hourly date registered + timedelta
+                    begin_hourly = (df_hourly.index.min() - timedelta(days=(self.overlap_hourly_daily-1))).to_pydatetime().date()
+                    begin_hourly = date_to_datetime(begin_hourly)
+                    end = min(self.end, begin_hourly)
+                else:
+                    end = self.end
+                yield self.query(topic_name, topic_code, geo_code, self.trends_request, self.begin, end,
+                                 self.directory, self.overlap, self.cat, self.number, self.gprop,
+                                 savefile=self.savefile, shuffle=self.shuffle)
+        self.status = 'done'
+        yield None
+
+    def growth_list_iterator_hourly(self) -> Iterator[Query]:
+        """
+        iterator used for the hourly requests. Only called once the daily requests have been processed
+        """
+        self.status = 'running'
+        for topic_name, topic_code in self.topics.items():
+            for geo_code, geo_name in self.geo.items():
+                filename = f'{self.directory}/{geo_code}-{topic_name}.csv'
+                if os.path.exists(filename):
+                    df_daily = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index(
+                        'date')
+                    # first hourly date registered + timedelta
+                    end_daily = (df_daily.index.max() - timedelta(days=(self.overlap_hourly_daily-1))).to_pydatetime()
+                    begin = date_to_datetime(end_daily)
+                    yield self.query_hourly(topic_name, topic_code, geo_code, self.trends_request, begin, self.end,
+                                     self.directory_hourly, self.overlap_hourly, self.cat, self.number, self.gprop,
+                                     savefile=self.savefile, shuffle=self.shuffle)
+                else:
+                    print(f'could not find file {filename}, ignoring hourly requests generation for it')
+        self.status = 'done'
+        yield None
+
+
 class ModelData:  # base class used to generate model data
 
     def __init__(self, topics: Dict[str, str] = None, geo: Dict[str, str] = None):
@@ -1292,24 +1389,29 @@ class ModelData:  # base class used to generate model data
             print('ratio:', scaling_full)
             print("my drop=", drop)
         scaling = scaling_full.mean()
-        if scaling < 1:  # right has not the good scale
-            if drop == 'left':
-                left_to_keep = left[left.index < intersection.min()]
-                right_to_add = right * scaling
-                scaled = left_to_keep.append(right_to_add)
-            else:
-                right_to_add = right[right.index > intersection.max()]
-                right_to_add = right_to_add * scaling
-                scaled = left.append(right_to_add)
-        else:  # left has not the good scale
-            if drop == 'right':
-                right_to_keep = right[right.index > intersection.max()]
-                left_to_add = left / scaling
-                scaled = left_to_add.append(right_to_keep)
-            else:
-                left_to_add = left[left.index < intersection.min()]
-                left_to_add = left_to_add / scaling
-                scaled = left_to_add.append(right)
+        if np.isnan(scaling):  # no valid data was found on the whole intersection, return zero dataframe
+            left_to_keep = left[left.index < intersection.min()]
+            scaled = left_to_keep.append(right)
+            scaled[topic] = 0
+        else:  # valid data was found on the intersection
+            if scaling < 1:  # right has not the good scale
+                if drop == 'left':
+                    left_to_keep = left[left.index < intersection.min()]
+                    right_to_add = right * scaling
+                    scaled = left_to_keep.append(right_to_add)
+                else:
+                    right_to_add = right[right.index > intersection.max()]
+                    right_to_add = right_to_add * scaling
+                    scaled = left.append(right_to_add)
+            else:  # left has not the good scale
+                if drop == 'right':
+                    right_to_keep = right[right.index > intersection.max()]
+                    left_to_add = left / scaling
+                    scaled = left_to_add.append(right_to_keep)
+                else:
+                    left_to_add = left[left.index < intersection.min()]
+                    left_to_add = left_to_add / scaling
+                    scaled = left_to_add.append(right)
         return scaled
 
     @staticmethod
@@ -1558,6 +1660,62 @@ class HourlyModelData(ModelData):
         return df
 
 
+class MinimalModelData(ModelData):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.directory_hourly = dir_min_hourly
+        self.directory_daily = dir_min_daily
+
+    def generate_model_data(self):
+        """
+        generate model data for the available queries, using the hourly requests stored and the daily gap requests stored
+        for intervals where no data existed
+        """
+        for (dirpath, dirnames, filenames) in os.walk(self.directory_hourly):
+            for filename in filenames:
+                topic_code = None
+                topic_name = None
+                begin = None
+                end = None
+                geo = None
+                try:
+                    search_obj = re.match('([^_]*)-([^-_]*).csv', filename)
+                    if search_obj is None:
+                        continue
+                    geo, topic_name = search_obj.group(1), search_obj.group(2)
+                    if self.geo and self.topics and ((geo not in self.geo) or (topic_name not in self.topics)):
+                        continue
+
+                    daily_df = pd.read_csv(f"{self.directory_daily}/{filename}", parse_dates=['date'],
+                                                 date_parser=date_parser_daily).set_index('date')
+                    gb = daily_df.groupby("batch_id")
+                    topic_code = daily_df.columns[-2]  # last column is batch_id, the one before is the topic code
+                    list_df = [gb.get_group(x)[[topic_code]] for x in gb.groups]
+
+                    df_hourly = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
+                                         date_parser=date_parser_hourly).set_index('date')
+                    begin = daily_df.index.min().to_pydatetime()
+                    end = df_hourly.index.max().to_pydatetime()
+                    topic_code = df_hourly.columns[-2]
+                    list_df_hourly = HourlyModelData.hourly_to_list_daily(df_hourly, topic_code)
+
+                    model = list_df[0]
+                    for df in list_df[1:]:  # add the daily data
+                        model = ModelData.merge_trends_batches(model, df, topic_code)
+                    # add hourly data at the end
+                    model = ModelData.merge_trends_batches(model, list_df_hourly[0], topic_code)
+                    filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
+                    model.to_csv(filename)
+                except (KeyError, AttributeError, ValueError):
+                    print(f'error when generating model data for {filename}')
+                    if end is not None:
+                        print('Generating zero dataframe instead')
+                        model = TrendsRequest.zero_dataframe([topic_code], begin, end).drop(columns=['isPartial'])
+                        filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
+                        model.to_csv(filename)
+
+
 def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str, str]=None, gap: bool = True):
     """
     collect the google trends data
@@ -1574,7 +1732,7 @@ def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str,
 
     trend_request = LocalTrendsRequest(max_errors=5)  # use local queries for the beginning
     begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
-    end = datetime.strptime('2020-05-09T23', hour_format)
+    end = datetime.strptime('2021-05-09T23', hour_format)
     if daily:
         query_list = DailyQueryList(topics, geo, trend_request, begin, end, number=10, savefile=True)
     else:
@@ -1598,21 +1756,47 @@ def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str,
                 query_list.set_trends_request(trend_request)
 
 
-def generate_model_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str, str]=None):
+def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None):
+    if topics is None:
+        topics = util.list_topics
+    if geo is None:
+        geo = util.french_region_and_be
+    # trend_request = FakeTrendsRequest()  # use local queries for the beginning
+    trend_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
+    begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
+    end = datetime.strptime('2021-05-16T23', hour_format)
+    query_list = MinimalQueryList(topics, geo, trend_request, begin, end, savefile=True)
+    finished = False
+    while not finished:
+        try:
+            finished = query_list()
+        except Exception as err:  # trend_request failed, using tor for the remaining requests
+            print(type(err))
+            trend_request = TorTrendsRequest(max_errors=np.inf)
+            query_list.set_trends_request(trend_request)
+
+
+def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None):
     """
     generate model data
     :param daily: whether to generate the model data using the daily method or not
     :return: None. save the results to the data/trends/model folder
     """
-    if daily:
+    if method == 'daily':
         model_data = DailyModelData(topics, geo)
-    else:
+    elif method == 'hourly':
         model_data = HourlyModelData(topics, geo)
+    elif method == 'minimal':
+        model_data = MinimalModelData(topics, geo)
+    else:
+        raise Exception(f'unimplemented model generation ({method})')
     model_data.generate_model_data()
 
 
 if __name__ == '__main__':
     topics = util.list_topics
-    geo = util.french_region_and_be
-    collect_data(False, topics, geo, False)
-    # generate_model_data(False, topics, geo)
+    geo = util.european_geocodes
+    collect_minimal_data(topics, geo)
+    generate_model_data('minimal', topics, geo)
+    # collect_data(False, topics, geo, False)
+    # generate_model_data('daily', topics, geo)
