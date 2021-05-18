@@ -71,7 +71,7 @@ french_region_and_be = {
     'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
     'FR-U': "Provence-Alpes-Côte d'Azur",
     'FR-V': "Auvergne-Rhône-Alpes",
-    'BE': "Belgique"
+    'BE': "Belgique",
 }
 
 european_adjacency = [
@@ -201,9 +201,9 @@ european_population = {
 list_topics = {
     'Fièvre': '/m/0cjf0',
     'Mal de gorge': '/m/0b76bty',
-    'Dyspnée': '/m/01cdt5',
-    'Agueusie': '/m/05sfr2',
-    'Anosmie': '/m/0m7pl',
+    # 'Dyspnée': '/m/01cdt5',
+    # 'Agueusie': '/m/05sfr2',
+    # 'Anosmie': '/m/0m7pl',
     'Virus': '/m/0g9pc',
     'Épidémie': '/m/0hn9s',
     'Symptôme': '/m/01b_06',
@@ -213,6 +213,14 @@ list_topics = {
     'Respiration': '/m/02gy9_',
     'Toux': '/m/01b_21',
     'PCR': '/m/05w_j',
+    'COVID-19 testing': '/g/11j8qdq0kc',
+    'Coronavirus disease 2019': '/g/11j2cc_qll',
+    'Vaccination': '/g/121j1nlf',
+    'COVID-19 vaccine': '/g/11j8_9sv06',
+    'Cure': '/m/0405g08',
+    'Allergy': '/m/0fd23',
+    # 'Severe acute respiratory syndrome coronavirus 2': '/g/11j4xt9hdf',
+    # 'Respiratory syncytial virus': '/m/02f84_',
 }
 
 
@@ -341,6 +349,8 @@ def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium
             highest[loc] = date_current
 
     highest_date = min(highest.values())
+    if date_begin is None:
+        date_begin = '2020-02-01'
     base_date = datetime.strptime(date_begin, "%Y-%m-%d").date()
 
     # Add "fake" data (zeroes before the beginning of the crisis) for each loc

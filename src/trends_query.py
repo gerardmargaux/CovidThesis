@@ -1,7 +1,5 @@
 from pytrends.request import TrendReq
 from pytrends import exceptions
-from toripchanger import TorIpChanger
-from toripchanger.exceptions import TorIpError
 from requests.exceptions import ReadTimeout, ConnectTimeout, ConnectionError
 import pandas as pd
 import os.path
@@ -18,7 +16,12 @@ import requests
 import json
 from requests.packages.urllib3.util.retry import Retry
 import util
-
+try:
+    from toripchanger import TorIpChanger
+    from toripchanger.exceptions import TorIpError
+    tor_ip_set = True
+except ImportError:
+    tor_ip_set = False
 
 dir_daily = "../data/trends/collect_daily"
 dir_daily_gap = "../data/trends/collect_gap"
@@ -26,8 +29,9 @@ dir_hourly = "../data/trends/collect"
 dir_min_hourly = "../data/trends/collect_minimal/hourly"
 dir_min_daily = "../data/trends/collect_minimal/daily"
 dir_model = "../data/trends/model"
-day_format = '%Y-%m-%d'
-hour_format = '%Y-%m-%dT%H'
+dir_explore = "../data/trends/explore"
+day_format = "%Y-%m-%d"
+hour_format = "%Y-%m-%dT%H"
 max_query_days = 269
 
 
@@ -159,7 +163,10 @@ class TrendsRequest:  # interface to query google trends data, using a TrendReq 
         self.request_done = 0
         self.nb_exception = 0
 
-    def get_interest_over_time(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop=''):
+    def get_interest_over_time(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop='') -> Union[None, pd.DataFrame]:
+        raise NotImplementedError
+
+    def related_topics(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop='') -> Union[None, Dict[str, str]]:
         raise NotImplementedError
 
     @classmethod
@@ -215,11 +222,11 @@ class LocalTrendsRequest(TrendsRequest):
         """
         get the interest over time value for a list of keywords, on a given loc and time interval. In case of error,
         sleep and return None
-        :param kw_list:
-        :param cat:
-        :param timeframe:
-        :param geo:
-        :param gprop:
+        :param kw_list: keywords / topics to query
+        :param cat: google trends category to use
+        :param timeframe: dates to query
+        :param geo: localisation of query
+        :param gprop: google trends property to filter on
         :return: pandas dataframe is the request succeeded and None otherwise
         """
         self.kw_list = kw_list
@@ -247,30 +254,46 @@ class LocalTrendsRequest(TrendsRequest):
             return TrendsRequest.zero_dataframe(self.kw_list, begin, end, freq=freq)
         return df
 
-    '''
-    def build_payload(self, kw_list: List[str], cat: int = 0, timeframe: str = 'today 5-y', geo: str = '',
-                      gprop: str = ''):
-        print('payload')
+    def related_topics(self, kw_list, cat=0, timeframe='today 3-m', geo='', gprop=''):
+        """
+        get the interest over time value for a list of keywords, on a given loc and time interval. In case of error,
+        sleep and return None
+        :param kw_list: list of keywords. Should contain only one keyword
+        :param cat: google trends category to use
+        :param timeframe: dates to query
+        :param geo: localisation of query
+        :param gprop: google trends property to filter on
+        :return: Dict of topics if the request succeeded and None otherwise
+        """
+        assert len(kw_list) == 1
         self.kw_list = kw_list
         self.timeframe = timeframe
         self.geo = geo
         error_before = self.nb_exception
+        if self.verbose:
+            print(f'related query on {self.geo}: {self.kw_list} for {timeframe}... ', end='')
         function = partial(self.pytrends.build_payload, kw_list, cat, timeframe, geo, gprop)
-        self._handle_errors(function)
+        res = self._handle_errors(function)
         if self.nb_exception == error_before:
             self.intermediate_sleep()
-
-    def interest_over_time(self):
-        print('interest')
-        function = partial(self.pytrends.interest_over_time)
+        function = partial(self.pytrends.related_topics)
         df = self._handle_errors(function)
+        if df is None:
+            if self.verbose:
+                print('failed')
+            return None
         self.request_done += 1
-        if df.empty:
-            begin, end = timeframe_to_date(self.timeframe)
-            freq = 'T' if is_timeframe_hourly(self.timeframe) else 'D'
-            return TrendsRequest.zero_dataframe(self.kw_list, begin, end, freq=freq)
-        return df
-    '''
+        if self.verbose:
+            print('retrieved')
+        if df[kw_list[0]]['rising'].empty:
+            return {}
+        else:
+            dic_rising = df[kw_list[0]]['rising'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()[
+                'topic_mid']
+            dic_top = df[kw_list[0]]['top'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()['topic_mid']
+            values = {**dic_rising, **dic_top}
+            values = {k.replace('/', '_'): v for k, v in values.items()}
+            return values
 
     def _handle_errors(self, function: callable):
         """
@@ -702,6 +725,9 @@ class HourlyQueryBatch(QueryBatch):  # query batch using a hourly interval
         :param number: number of queries done on a single batch. Final result = mean of those queries
         :param gprop: google trends property to filter on
         """
+        self.asked_begin = begin
+        self.asked_end = end
+        begin, end = self.ensure_min_hour(begin, end)
         super().__init__(kw, geo, trends_request, begin, end, batch_id, cat, number, gprop)
         self.timeframe = dates_to_timeframe(self.begin, self.end, hours=True)
 
@@ -716,12 +742,22 @@ class HourlyQueryBatch(QueryBatch):  # query batch using a hourly interval
     def max_len(cls) -> int:
         return 192  # number of data points allowed by google trends when using hourly requests
 
+    @classmethod
+    def ensure_min_hour(cls, begin: datetime, end: datetime) -> Tuple[datetime, datetime]:
+        """
+        ensure that the duration is the minimum allowed to get hourly requests
+        """
+        if end - begin < timedelta(days=3):
+            return end - timedelta(days=3), end
+        else:
+            return begin, end
+
     def __call__(self, *args, **kwargs) -> bool:
         if self.df.empty:
             df = self.fetch_data(self.timeframe)
             if df is None:  # the request could not be fetched
                 return False
-            self.df = df.drop(columns=['isPartial'])
+            self.df = df.drop(columns=['isPartial'])[self.asked_begin:self.asked_end]
             if sum(self.df.index.minute):
                 # if the dataframe was not given as hourly (for instance minute dataframe), resample it to daily data
                 self.df = self.df.resample('H').mean()
@@ -1021,15 +1057,21 @@ class QueryList:  # handle a list of queries
     def __call__(self, *args, **kwargs) -> bool:
         """
         Choose a query at random and process it. If the query is finished, removes it from the list of queries
-        :return bool if all queries have been processed
+        :return True if all queries have been processed
         """
         if self.list_queries:  # there are queries awaiting
             empty_list = False
             if self.shuffle:
-                query = self.list_queries.pop()
+                # query = self.list_queries.pop()
+                query = self.list_queries[-1]
             else:
-                query = self.list_queries.popleft()
-            query_finished = query()
+                # query = self.list_queries.popleft()
+                query = self.list_queries[0]
+            query_finished = query()  # can throw an exception
+            if self.shuffle:
+                self.list_queries.pop()
+            else:
+                self.list_queries.popleft()
             self.nb_sub_processed += 1
             self.process_cycle += 1
             if query_finished:
@@ -1052,6 +1094,8 @@ class QueryList:  # handle a list of queries
             else:  # the list of queries should grow
                 self.growth_list()
                 return self()
+        else:
+            return False
 
     def done(self):  # called once when all queries have been processed
         pass
@@ -1345,6 +1389,139 @@ class MinimalQueryList(QueryList):
                     print(f'could not find file {filename}, ignoring hourly requests generation for it')
         self.status = 'done'
         yield None
+
+
+class RelevantTopic:
+    """
+    get the most relevant topics that can be retrieved through pytrends, relative to the hospitalisations
+    """
+
+    def __init__(self, df_hospi, max_lag, threshold, max_steps,
+                 init_topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
+                 begin: datetime, end: datetime,
+                 cat: int = 0, gprop: str = ''):
+        assert len(geo) == 1
+        assert (end - begin).days + 1 <= DailyQueryBatch.max_len()
+        self.df_hospi = df_hospi
+        self.init_topics = init_topics
+        self.geo = [loc for loc in geo.keys()][0]
+        self.max_lag = max_lag
+        self.threshold = threshold
+        self.max_steps = max_steps
+        self.steps = 0
+        self.trends_request = trends_request
+        self.list_queries_interest = []
+        self.new_df = {}
+        self.begin = begin
+        self.end = end
+        self.correlation_df = pd.DataFrame(columns=("Topic_title", "Topic_mid", "Best delay", "Best correlation"))
+        self.new_best_topics = []  # list of topics to use to generate related topics from
+        self.related_topics = init_topics  # the first related topics are the initial topics
+        self.new_related_topics = init_topics
+        self.directory = dir_explore
+        self.cat = cat
+        self.gprop = gprop
+        self.timeframe = dates_to_timeframe(self.begin, self.end, False)
+        self.status = 'interest'  # one between 'interest' and 'related'
+        self.growth_interest()
+
+    @staticmethod
+    def compute_corr(left, delta, hospi, init_df):
+        """
+        Computes the correlation between a particular feature and another
+        :param left: feature that we want to correlate
+        :param delta: delay introduced in the dataframe (in days)
+        :param full_data_be: dataframe containing all the data
+        :param init_df: initial dataframe
+        :return: the correlation between the left feature and the number of new hospitalization
+        """
+        thisdata = pd.concat([init_df[left].shift(delta), hospi["TOT_HOSP"]], axis=1)
+        return thisdata.corr()["TOT_HOSP"][left]
+
+    def __call__(self, *args, **kwargs) -> bool:
+        """
+        process a query
+        :return bool if all queries have been processed
+        """
+        if self.status == 'interest':
+            return self.get_interest()
+        elif self.status == 'related':
+            return self.get_related()
+
+    def get_interest(self) -> bool:
+        if self.list_queries_interest:  # there are queries awaiting
+            query = self.list_queries_interest.pop()
+            query_finished = query()
+            assert query_finished  # the queries should cover only one timeslot
+            df = query.get_df()
+            df = df.rolling(7, center=True).mean().dropna()
+            self.new_df[query.topic_name] = df[[query.topic_code]]
+            return False
+        else:  # no more queries in the list
+            self.steps += 1
+            self.actualize_correlation()
+            if self.steps >= self.max_steps:
+                self.save_correlation()
+                return True
+            else:
+                self.status = 'related'
+                self()
+
+    def get_related(self) -> bool:
+        if self.new_best_topics:
+            topic_code = self.new_best_topics[-1]
+            # dict of topic_name, topic_code
+            new_related = self.trends_request.related_topics([topic_code], self.cat, self.timeframe, self.geo, self.gprop)
+            # add only the new topics
+            self.new_related_topics.update({k: v for k, v in new_related.items() if k not in self.related_topics})
+            # topic saved for further usage
+            self.related_topics.update(new_related)
+            self.new_best_topics.pop()
+            return False
+        else:
+            self.growth_interest()
+            self.status = 'interest'
+            self()
+
+    def actualize_correlation(self):
+        # compute the correlation
+        data = []
+        for topic_name, df in self.new_df.items():
+            topic_code = df.columns[0]
+            correlations = [(delay, self.compute_corr(topic_code, delay, self.df_hospi, df)) for delay in range(0, self.max_lag)]
+            best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
+            data.append([topic_name, topic_code, best_delay, best_corr])
+        new_correlation = pd.DataFrame(data, columns=("Topic_title", "Topic_mid", "Best delay", "Best correlation"))
+        self.correlation_df = self.correlation_df.append(new_correlation)  # actualize the correlation
+        self.new_df = {}  # reset the new df obtained
+        # new topics used to generate related topics
+        self.new_best_topics = [val[1] for val in data if abs(val[3]) >= self.threshold]
+        print('new promising topics:', self.new_best_topics)
+
+    def growth_interest(self):
+        for topic_name, topic_code in self.new_related_topics.items():
+            self.list_queries_interest.append(DailyQuery(topic_name, topic_code, self.geo, self.trends_request,
+                                                        self.begin, self.end, self.directory, 0, self.cat, 1, self.gprop,
+                                                        savefile=True, shuffle=True))
+        self.new_related_topics = {}
+
+    def save_correlation(self):
+        self.correlation_df.drop_duplicates(subset='Topic_title', keep='first', inplace=True)  # drop duplicates in the dataframe
+        self.correlation_df.reset_index(0, inplace=True, drop=True)  # reset the index --> index = date
+        self.correlation_df = self.correlation_df.sort_values(by='Best correlation', key=lambda col: abs(col), ascending=False)
+        self.correlation_df.to_csv(f'{dir_explore}/{self.geo}-related_topics.csv', index=False)  # write results in a csv file
+
+    def get_correlation(self):
+        return self.correlation_df
+
+    def set_trends_request(self, trends_request: TrendsRequest):
+        """
+        set the trends request for this instance, all its current queries and its newest queries
+        :param trends_request: TrendsRequest instance to use
+        """
+        self.trends_request = trends_request
+        for query in self.list_queries_interest:
+            query.set_trends_request(trends_request)
 
 
 class ModelData:  # base class used to generate model data
@@ -1671,6 +1848,8 @@ class MinimalModelData(ModelData):
         generate model data for the available queries, using the hourly requests stored and the daily gap requests stored
         for intervals where no data existed
         """
+        # list of [exceptions caught, files considered, [regions exceptions]]
+        exceptions_topic = {topic: [0, 0, []] for topic in self.topics}
         for (dirpath, dirnames, filenames) in os.walk(self.directory_hourly):
             for filename in filenames:
                 topic_code = None
@@ -1685,7 +1864,7 @@ class MinimalModelData(ModelData):
                     geo, topic_name = search_obj.group(1), search_obj.group(2)
                     if self.geo and self.topics and ((geo not in self.geo) or (topic_name not in self.topics)):
                         continue
-
+                    exceptions_topic[topic_name][1] += 1
                     daily_df = pd.read_csv(f"{self.directory_daily}/{filename}", parse_dates=['date'],
                                                  date_parser=date_parser_daily).set_index('date')
                     gb = daily_df.groupby("batch_id")
@@ -1704,15 +1883,56 @@ class MinimalModelData(ModelData):
                         model = ModelData.merge_trends_batches(model, df, topic_code)
                     # add hourly data at the end
                     model = ModelData.merge_trends_batches(model, list_df_hourly[0], topic_code)
-                    filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
-                    model.to_csv(filename)
+                    filename_model = f"{self.directory_model}/{geo}-{topic_name}.csv"
+                    if (model[topic_code] == 0).all():
+                        print(f'error when generating model data from {filename}. Generating zero dataframe instead')
+                        exceptions_topic[topic_name][0] += 1
+                        exceptions_topic[topic_name][2].append(geo)
+                    model.to_csv(filename_model)
+
+
                 except (KeyError, AttributeError, ValueError, IndexError):
-                    print(f'error when generating model data for {filename}')
+                    print(f'error when generating model data from {filename}', end='')
                     if end is not None:
-                        print('Generating zero dataframe instead')
+                        print('. Generating zero dataframe instead')
                         model = TrendsRequest.zero_dataframe([topic_code], begin, end).drop(columns=['isPartial'])
-                        filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
-                        model.to_csv(filename)
+                        filename_model = f"{self.directory_model}/{geo}-{topic_name}.csv"
+                        model.to_csv(filename_model)
+                    else:
+                        print()
+                    exceptions_topic[topic_name][0] += 1
+                    exceptions_topic[topic_name][2].append(geo)
+        for topic_name, (err, tot, loc) in exceptions_topic.items():
+            print(f'topic {topic_name}: {err}/{tot} errors', end='')
+            if err != 0:
+                print('(', end='')
+                for i, region in enumerate(sorted(loc)):
+                    print(region, end='' if i==err-1 else ', ')
+                print(')')
+            else:
+                print()
+
+
+def run_collect(trends_request, query_list):
+    """
+    run a callable (QueryList or similar) several time until it is finished. Switch to Tor if an exception is thrown
+    :param trends_request: trends request instance to use for the collection of data
+    :param collection: QueryList instance / callable instance to use. Must return False when it needs to be processed
+        and True once it is done
+    :return: trends_request instance used at the end of the iterations
+    """
+    finished = False
+    while not finished:
+        try:
+            finished = query_list()
+        except:  # trends_request failed, using tor for the remaining requests
+            if tor_ip_set:
+                print('using tor')
+                trends_request = TorTrendsRequest(max_errors=np.inf)
+            else:
+                trends_request = LocalTrendsRequest(max_errors=np.inf)
+            query_list.set_trends_request(trends_request)
+    return trends_request
 
 
 def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str, str]=None, gap: bool = True):
@@ -1729,30 +1949,17 @@ def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str,
     if geo is None:
         geo = util.french_region_and_be
 
-    trend_request = LocalTrendsRequest(max_errors=5)  # use local queries for the beginning
+    trends_request = LocalTrendsRequest(max_errors=5)  # use local queries for the beginning
     begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
     end = datetime.strptime('2021-05-09T23', hour_format)
     if daily:
-        query_list = DailyQueryList(topics, geo, trend_request, begin, end, number=10, savefile=True)
+        query_list = DailyQueryList(topics, geo, trends_request, begin, end, number=10, savefile=True)
     else:
-        query_list = HourlyQueryList(topics, geo, trend_request, begin, end, number=1, savefile=True)
-    finished = False
-    while not finished:
-        try:
-            finished = query_list()
-        except:  # trend_request failed, using tor for the remaining requests
-            print('using tor')
-            trend_request = TorTrendsRequest(max_errors=np.inf)
-            query_list.set_trends_request(trend_request)
+        query_list = HourlyQueryList(topics, geo, trends_request, begin, end, number=1, savefile=True)
+    trends_request = run_collect(trends_request, query_list)
     if not daily and gap:  # queries on the gap
-        query_list = DailyGapQueryList(topics, geo, trend_request, begin, end, number=20, savefile=True)
-        finished = False
-        while not finished:
-            try:
-                finished = query_list()
-            except:  # trend_request failed, using tor for the remaining requests
-                trend_request = TorTrendsRequest(max_errors=np.inf)
-                query_list.set_trends_request(trend_request)
+        query_list = DailyGapQueryList(topics, geo, trends_request, begin, end, number=20, savefile=True)
+        run_collect(trends_request, query_list)
 
 
 def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None):
@@ -1761,18 +1968,38 @@ def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None
     if geo is None:
         geo = util.french_region_and_be
     # trend_request = FakeTrendsRequest()  # use local queries for the beginning
-    trend_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
-    begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
-    end = datetime.strptime('2021-05-16T23', hour_format)
-    query_list = MinimalQueryList(topics, geo, trend_request, begin, end, savefile=True)
-    finished = False
-    while not finished:
-        try:
-            finished = query_list()
-        except Exception as err:  # trend_request failed, using tor for the remaining requests
-            print(type(err))
-            trend_request = TorTrendsRequest(max_errors=np.inf)
-            query_list.set_trends_request(trend_request)
+    trends_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
+    begin = datetime.strptime('2020-02-01', day_format)
+    end = datetime.strptime('2021-05-18T23', hour_format)
+    query_list = MinimalQueryList(topics, geo, trends_request, begin, end, savefile=True)
+    run_collect(trends_request, query_list)
+
+
+def collect_relevant_topics(topics: Dict[str, str] = None, geo: Dict[str, str]=None):
+    if topics is None:
+        topics = util.list_topics
+    if geo is None:
+        geo = {'BE': 'Belgium'}
+    trends_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
+    begin = datetime.strptime('2021-02-01', day_format)
+    end = datetime.strptime('2021-05-14', day_format)
+    '''
+        def __init__(self, df_hospi, max_lag, threshold, max_steps,
+                 init_topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
+                 begin: datetime, end: datetime,
+                 cat: int = 0, gprop: str = ''):
+     '''
+    url_hospi_belgium = "../data/hospi/be-covid-hospi.csv"
+    url_department_france = "france_departements.csv"
+    url_hospi_france_new = "../data/hospi/fr-covid-hospi.csv"
+    url_hospi_france_tot = "../data/hospi/fr-covid-hospi-total.csv"
+    df_hospi = util.hospi_french_region_and_be(url_hospi_france_tot, url_hospi_france_new, url_hospi_belgium,
+                                               url_department_france, util.french_region_and_be, new_hosp=True,
+                                               tot_hosp=True)['BE']
+    df_hospi = df_hospi.reset_index().rename(columns={'DATE': 'date'}).drop(columns=['LOC']).set_index('date').\
+        rolling(7, center=True).mean().dropna()
+    queries = RelevantTopic(df_hospi, 25, 0.75, 5, topics, geo, trends_request, begin, end)
+    run_collect(trends_request, queries)
 
 
 def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None):
@@ -1794,8 +2021,9 @@ def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo:
 
 if __name__ == '__main__':
     topics = util.list_topics
-    geo = util.european_geocodes
-    collect_minimal_data(topics, geo)
+    geo = util.french_region_and_be
+    # collect_minimal_data(topics, geo)
     generate_model_data('minimal', topics, geo)
+    # collect_relevant_topics()
     # collect_data(False, topics, geo, False)
     # generate_model_data('daily', topics, geo)
