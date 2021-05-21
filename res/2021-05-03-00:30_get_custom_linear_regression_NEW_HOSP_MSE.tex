@@ -1,0 +1,33 @@
+%2021-05-03-00:30_get_custom_linear_regression_NEW_HOSP_MSE
+\begin{table}[H]
+\centering
+\caption{MSE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MSE_walk_custom_linear_regression}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &   walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &    mean \\
+\midrule
+t+1  & 1259.72  & 391.24  & 92.05  & 141.89  & \textbf{72.41}  & 391.46  \\
+t+2  & 1650.98  & 416.52  & 127.60  & 172.20  & \textbf{93.79}  & 492.22  \\
+t+3  & 2114.86  & 447.65  & 172.09  & 198.88  & \textbf{114.06}  & 609.51  \\
+t+4  & 2658.15  & 479.04  & 215.93  & 229.94  & \textbf{134.09}  & 743.43  \\
+t+5  & 3268.02  & 507.21  & 262.76  & 261.03  & \textbf{150.75}  & 889.95  \\
+t+6  & 3937.66  & 533.76  & 311.76  & 291.27  & \textbf{161.64}  & 1047.22  \\
+t+7  & 4653.40  & 559.35  & 361.95  & 318.14  & \textbf{169.94}  & 1212.55  \\
+t+8  & 5353.45  & 585.04  & 406.23  & 347.12  & \textbf{180.62}  & 1374.49  \\
+t+9  & 6097.69  & 621.15  & 449.28  & 375.84  & \textbf{194.09}  & 1547.61  \\
+t+10  & 6876.57  & 660.79  & 484.61  & 409.59  & \textbf{204.36}  & 1727.18  \\
+t+11  & 7690.13  & 699.73  & 519.07  & 444.92  & \textbf{216.24}  & 1914.02  \\
+t+12  & 8534.52  & 742.07  & 551.09  & 481.09  & \textbf{227.85}  & 2107.33  \\
+t+13  & 9416.42  & 782.60  & 578.23  & 521.08  & \textbf{243.68}  & 2308.40  \\
+t+14  & 10346.68  & 828.75  & 599.77  & 565.48  & \textbf{260.57}  & 2520.25  \\
+t+15  & 11325.20  & 866.83  & 620.21  & 612.70  & \textbf{276.78}  & 2740.34  \\
+t+16  & 12345.99  & 905.22  & 639.07  & 665.86  & \textbf{298.47}  & 2970.92  \\
+t+17  & 13414.42  & 950.81  & 656.80  & 723.73  & \textbf{318.83}  & 3212.92  \\
+t+18  & 14534.71  & 979.36  & 673.68  & 783.87  & \textbf{343.61}  & 3463.04  \\
+t+19  & 15695.70  & 1004.88  & 691.95  & 847.24  & \textbf{377.90}  & 3723.53  \\
+t+20  & 16880.20  & 1043.34  & 709.02  & 915.11  & \textbf{425.16}  & 3994.57  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

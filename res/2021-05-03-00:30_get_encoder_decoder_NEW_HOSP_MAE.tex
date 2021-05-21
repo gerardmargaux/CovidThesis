@@ -1,0 +1,33 @@
+%2021-05-03-00:30_get_encoder_decoder_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_encoder_decoder}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &  mean \\
+\midrule
+t+1  & 16.07  & 15.14  & 3.72  & 2.70  & \textbf{2.39}  & 8.00  \\
+t+2  & 20.38  & 18.34  & 5.01  & \textbf{3.52}  & 3.64  & 10.18  \\
+t+3  & 20.85  & 20.60  & 6.24  & \textbf{4.20}  & 5.68  & 11.52  \\
+t+4  & 20.27  & 21.48  & 7.26  & \textbf{5.02}  & 7.24  & 12.26  \\
+t+5  & 19.75  & 21.44  & 8.01  & \textbf{5.90}  & 8.23  & 12.67  \\
+t+6  & 19.49  & 20.99  & 8.61  & \textbf{6.68}  & 8.91  & 12.93  \\
+t+7  & 19.50  & 20.42  & 9.19  & \textbf{7.38}  & 9.29  & 13.16  \\
+t+8  & 19.63  & 19.97  & 9.54  & \textbf{7.68}  & 9.47  & 13.26  \\
+t+9  & 19.90  & 19.65  & 9.90  & \textbf{7.91}  & 9.75  & 13.42  \\
+t+10  & 20.23  & 19.54  & 10.16  & \textbf{8.18}  & 9.98  & 13.62  \\
+t+11  & 20.65  & 19.61  & 10.50  & \textbf{8.48}  & 10.32  & 13.91  \\
+t+12  & 21.00  & 19.86  & 10.83  & \textbf{8.72}  & 10.53  & 14.19  \\
+t+13  & 21.38  & 20.22  & 11.14  & \textbf{8.99}  & 10.85  & 14.52  \\
+t+14  & 21.73  & 20.71  & 11.42  & \textbf{9.26}  & 11.24  & 14.87  \\
+t+15  & 22.17  & 21.24  & 11.72  & \textbf{9.50}  & 11.48  & 15.22  \\
+t+16  & 22.61  & 21.88  & 11.99  & \textbf{9.68}  & 11.65  & 15.56  \\
+t+17  & 23.01  & 22.54  & 12.25  & \textbf{9.89}  & 11.75  & 15.89  \\
+t+18  & 23.44  & 23.09  & 12.48  & \textbf{10.08}  & 11.77  & 16.17  \\
+t+19  & 23.82  & 23.64  & 12.82  & \textbf{10.21}  & 11.90  & 16.48  \\
+t+20  & 24.15  & 24.15  & 13.13  & \textbf{10.35}  & 11.96  & 16.75  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

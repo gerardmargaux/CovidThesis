@@ -1,0 +1,33 @@
+%2021-05-20-16:21_get_encoder_decoder_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_encoder_decoder}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &  walk 6 &  mean \\
+\midrule
+t+1  & 22.31  & 11.69  & 21.37  & 6.22  & 7.74  & \textbf{3.95}  & 12.22  \\
+t+2  & 22.15  & 15.82  & 24.81  & 7.17  & 8.01  & \textbf{4.83}  & 13.80  \\
+t+3  & 20.33  & 17.57  & 27.05  & 7.46  & 8.18  & \textbf{6.47}  & 14.51  \\
+t+4  & 18.67  & 19.10  & 29.04  & \textbf{7.77}  & 8.54  & 8.32  & 15.24  \\
+t+5  & 17.51  & 20.72  & 30.77  & \textbf{8.60}  & 9.05  & 10.30  & 16.16  \\
+t+6  & 16.81  & 22.40  & 32.29  & 9.66  & \textbf{9.57}  & 12.47  & 17.20  \\
+t+7  & 16.69  & 24.02  & 33.64  & 11.00  & \textbf{10.09}  & 14.86  & 18.38  \\
+t+8  & 17.21  & 25.56  & 34.76  & 12.23  & \textbf{10.41}  & 17.23  & 19.57  \\
+t+9  & 18.17  & 27.08  & 35.69  & 13.48  & \textbf{10.72}  & 19.74  & 20.81  \\
+t+10  & 19.39  & 28.64  & 36.48  & 14.85  & \textbf{11.19}  & 22.24  & 22.13  \\
+t+11  & 20.85  & 30.26  & 37.11  & 16.21  & \textbf{11.67}  & 24.63  & 23.45  \\
+t+12  & 22.46  & 31.85  & 37.54  & 17.47  & \textbf{12.14}  & 27.06  & 24.76  \\
+t+13  & 24.24  & 33.42  & 37.86  & 18.75  & \textbf{12.61}  & 29.44  & 26.06  \\
+t+14  & 26.16  & 34.88  & 38.07  & 20.02  & \textbf{13.02}  & 31.57  & 27.29  \\
+t+15  & 28.09  & 36.24  & 38.16  & 21.29  & \textbf{13.51}  & 33.48  & 28.46  \\
+t+16  & 29.93  & 37.55  & 38.10  & 22.53  & \textbf{14.17}  & 35.17  & 29.57  \\
+t+17  & 31.80  & 38.73  & 38.00  & 23.71  & \textbf{14.84}  & 36.46  & 30.59  \\
+t+18  & 33.57  & 39.81  & 37.89  & 24.88  & \textbf{15.54}  & 37.50  & 31.53  \\
+t+19  & 35.22  & 40.77  & 37.75  & 26.04  & \textbf{16.25}  & 38.35  & 32.40  \\
+t+20  & 36.71  & 41.62  & 37.55  & 27.15  & \textbf{16.99}  & 39.08  & 33.19  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,33 @@
+%2021-05-19-22:41_get_dense_model_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_dense_model}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &  walk 6 &   mean \\
+\midrule
+t+1  & 21.26  & 34.98  & 24.19  & 23.52  & 26.49  & \textbf{21.25}  & 25.28  \\
+t+2  & 28.78  & 41.52  & \textbf{18.58}  & 26.91  & 32.11  & 21.71  & 28.27  \\
+t+3  & 37.90  & 45.59  & 26.00  & 23.48  & 24.83  & \textbf{22.78}  & 30.10  \\
+t+4  & 44.02  & 30.06  & 47.32  & 32.00  & 46.84  & \textbf{30.02}  & 38.38  \\
+t+5  & 56.27  & 63.31  & 38.39  & \textbf{31.75}  & 53.76  & 33.19  & 46.11  \\
+t+6  & 64.63  & 71.82  & 64.16  & 48.25  & 60.21  & \textbf{42.19}  & 58.54  \\
+t+7  & 73.99  & 83.21  & 70.31  & 53.06  & 51.44  & \textbf{39.06}  & 61.85  \\
+t+8  & 71.52  & 65.19  & 87.05  & 43.68  & 57.51  & \textbf{42.50}  & 61.24  \\
+t+9  & 97.97  & 78.01  & 76.64  & 48.78  & 70.42  & \textbf{43.88}  & 69.28  \\
+t+10  & 96.13  & 93.51  & 108.25  & 55.51  & 75.98  & \textbf{51.18}  & 80.09  \\
+t+11  & 119.19  & 142.82  & 121.73  & 61.66  & 111.88  & \textbf{57.45}  & 102.46  \\
+t+12  & 136.49  & 161.95  & 131.99  & 84.55  & 118.34  & \textbf{76.97}  & 118.38  \\
+t+13  & 146.29  & 181.07  & 123.92  & \textbf{73.35}  & 103.04  & 82.77  & 118.41  \\
+t+14  & 149.69  & 159.88  & 154.65  & 78.41  & 141.93  & \textbf{76.34}  & 126.82  \\
+t+15  & 163.71  & 185.77  & 169.87  & 86.05  & 126.64  & \textbf{81.42}  & 135.58  \\
+t+16  & 191.94  & 243.70  & 157.14  & 116.92  & 160.39  & \textbf{109.21}  & 163.22  \\
+t+17  & 205.21  & 226.37  & 174.49  & \textbf{106.50}  & 173.52  & 117.55  & 167.27  \\
+t+18  & 202.54  & 288.88  & 184.67  & 115.13  & 155.86  & \textbf{107.12}  & 175.70  \\
+t+19  & 217.08  & 272.53  & 196.62  & 123.30  & 162.54  & \textbf{115.71}  & 181.30  \\
+t+20  & 230.65  & 298.63  & 212.76  & 132.18  & 198.03  & \textbf{126.28}  & 199.76  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

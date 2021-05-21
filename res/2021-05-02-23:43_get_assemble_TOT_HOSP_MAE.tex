@@ -1,0 +1,37 @@
+%2021-05-02-23:43_get_assemble_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_assemble}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{walk 4} & \multicolumn{3}{c}{walk 5} & \multicolumn{3}{c}{mean} 
+\\
+
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} 
+Horizon & $\hat{y}_{t+i}^H$ & $\hat{y}_{t+i}^T$ & $\hat{y}_{t+i}$ & $\hat{y}_{t+i}^H$ & $\hat{y}_{t+i}^T$ & $\hat{y}_{t+i}$ & $\hat{y}_{t+i}^H$ & $\hat{y}_{t+i}^T$ & $\hat{y}_{t+i}$ \\
+\midrule
+t+1  & \textbf{15.18}  & 590.83  & \textbf{15.18}  & 18.63  & 382.01  & 18.63  & 66.03  & 670.15  & 66.03  \\
+t+2  & 29.76  & 588.83  & 29.76  & \textbf{18.58}  & 384.00  & \textbf{18.58}  & 66.26  & 671.42  & 66.26  \\
+t+3  & \textbf{22.32}  & 587.45  & \textbf{22.32}  & 23.41  & 389.39  & 23.41  & 72.66  & 669.84  & 72.66  \\
+t+4  & 27.55  & 584.23  & 27.55  & \textbf{27.45}  & 393.04  & \textbf{27.45}  & 73.28  & 664.96  & 73.28  \\
+t+5  & 42.50  & 579.24  & 42.50  & \textbf{35.45}  & 395.91  & 83.46  & 75.07  & 659.67  & 84.67  \\
+t+6  & \textbf{33.03}  & 573.52  & \textbf{33.03}  & 48.89  & 396.22  & 91.72  & 82.05  & 654.43  & 90.62  \\
+t+7  & 52.34  & 567.52  & 52.34  & \textbf{49.91}  & 394.59  & 92.40  & 85.17  & 649.41  & 93.67  \\
+t+8  & \textbf{45.15}  & 561.42  & \textbf{45.15}  & 86.36  & 392.15  & 113.73  & 101.44  & 644.63  & 106.91  \\
+t+9  & \textbf{65.90}  & 555.40  & \textbf{65.90}  & 70.85  & 391.07  & 107.22  & 107.38  & 640.33  & 114.66  \\
+t+10  & \textbf{54.96}  & 550.04  & \textbf{54.96}  & 89.69  & 391.31  & 119.08  & 109.59  & 636.61  & 115.47  \\
+t+11  & \textbf{60.35}  & 545.02  & \textbf{60.35}  & 91.40  & 394.34  & 122.21  & 120.79  & 633.64  & 126.95  \\
+t+12  & \textbf{66.05}  & 540.44  & \textbf{66.05}  & 139.82  & 398.98  & 152.88  & 133.51  & 631.16  & 136.12  \\
+t+13  & \textbf{75.31}  & 536.69  & \textbf{75.31}  & 124.02  & 403.59  & 145.81  & 136.99  & 628.95  & 141.34  \\
+t+14  & \textbf{102.25}  & 533.70  & \textbf{102.25}  & 139.48  & 408.02  & 157.30  & 161.40  & 626.93  & 164.96  \\
+t+15  & \textbf{90.84}  & 531.63  & \textbf{90.84}  & 187.91  & 412.32  & 189.25  & 163.71  & 625.14  & 163.98  \\
+t+16  & \textbf{117.39}  & 530.47  & \textbf{117.39}  & 170.12  & 416.29  & 180.56  & 181.92  & 623.59  & 184.01  \\
+t+17  & \textbf{127.65}  & 530.32  & \textbf{127.65}  & 186.60  & 420.17  & 193.92  & 191.34  & 622.32  & 192.80  \\
+t+18  & \textbf{115.24}  & 531.45  & \textbf{115.24}  & 199.64  & 424.13  & 205.55  & 200.41  & 621.40  & 201.59  \\
+t+19  & \textbf{145.87}  & 533.55  & \textbf{145.87}  & 210.62  & 427.93  & 216.17  & 219.26  & 620.74  & 220.37  \\
+t+20  & \textbf{134.27}  & 536.31  & \textbf{134.27}  & 226.63  & 431.82  & 230.30  & 233.09  & 620.33  & 233.83  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

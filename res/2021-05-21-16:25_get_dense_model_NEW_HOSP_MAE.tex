@@ -1,0 +1,33 @@
+%2021-05-21-16:25_get_dense_model_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_dense_model}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Horizon &  walk 1 &  walk 2 &  walk 3 &  walk 4 &  walk 5 &  walk 6 &  mean \\
+\midrule
+t+1  & 2.86  & 2.35  & 2.38  & \textbf{1.96}  & 2.26  & 2.32  & 2.36  \\
+t+2  & 4.62  & 3.51  & 3.52  & \textbf{2.98}  & 3.57  & 3.44  & 3.61  \\
+t+3  & 6.00  & 4.60  & 4.77  & \textbf{3.96}  & 4.71  & 4.54  & 4.76  \\
+t+4  & 7.30  & 5.84  & 5.76  & \textbf{4.90}  & 5.73  & 5.55  & 5.85  \\
+t+5  & 8.53  & 6.97  & 6.84  & \textbf{5.74}  & 6.71  & 6.31  & 6.85  \\
+t+6  & 9.91  & 7.85  & 7.86  & \textbf{6.55}  & 7.75  & 7.14  & 7.84  \\
+t+7  & 11.12  & 9.29  & 8.91  & \textbf{7.35}  & 8.79  & 7.86  & 8.89  \\
+t+8  & 11.54  & 9.71  & 9.16  & \textbf{7.56}  & 8.95  & 8.34  & 9.21  \\
+t+9  & 11.60  & 10.12  & 9.52  & \textbf{7.65}  & 8.92  & 8.84  & 9.44  \\
+t+10  & 11.86  & 10.40  & 9.72  & \textbf{7.82}  & 8.91  & 9.48  & 9.70  \\
+t+11  & 11.71  & 10.54  & 9.83  & \textbf{7.93}  & 8.87  & 10.20  & 9.85  \\
+t+12  & 11.89  & 11.02  & 9.95  & \textbf{7.99}  & 8.64  & 10.85  & 10.06  \\
+t+13  & 11.90  & 10.94  & 9.98  & \textbf{8.12}  & 8.37  & 11.90  & 10.20  \\
+t+14  & 11.99  & 11.36  & 10.02  & 8.38  & \textbf{8.27}  & 12.87  & 10.48  \\
+t+15  & 11.83  & 11.43  & 9.96  & 8.58  & \textbf{8.23}  & 13.76  & 10.63  \\
+t+16  & 11.74  & 11.44  & 9.96  & 8.71  & \textbf{8.18}  & 14.68  & 10.79  \\
+t+17  & 11.58  & 11.01  & 9.91  & 8.81  & \textbf{8.12}  & 15.50  & 10.82  \\
+t+18  & 11.26  & 10.94  & 9.88  & 8.88  & \textbf{8.01}  & 16.07  & 10.84  \\
+t+19  & 11.01  & 10.88  & 9.87  & 8.91  & \textbf{7.79}  & 16.64  & 10.85  \\
+t+20  & 10.58  & 10.96  & 9.80  & 9.10  & \textbf{7.73}  & 17.22  & 10.90  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

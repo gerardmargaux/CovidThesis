@@ -1,0 +1,33 @@
+%2021-05-19-22:41_MSE_TOT_HOSP
+\begin{table}[H]
+\centering
+\caption{MSE when predicting total hospitalizations for the different models, for up to 20 horizons. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MSE_comparison}
+\begin{tabular}{lrrrrr}
+\toprule
+Horizon &    Dense &  Encoder Decoder &  Assembled &  Baseline &  Linear Regression \\
+\midrule
+t+1  & 1568.08  & 67932.93  & 34.97  & 412.15  & \textbf{19.01}  \\
+t+2  & 1946.71  & 66985.69  & 270.26  & 1621.88  & \textbf{110.23}  \\
+t+3  & 2246.04  & 75737.15  & 857.34  & 3594.94  & \textbf{347.54}  \\
+t+4  & 3420.77  & 95700.96  & 1279.07  & 6295.50  & \textbf{820.17}  \\
+t+5  & 5007.61  & 130672.08  & 3030.49  & 9685.62  & \textbf{1626.89}  \\
+t+6  & 7717.38  & 180944.65  & 5306.75  & 13722.71  & \textbf{2870.74}  \\
+t+7  & 8427.95  & 245303.96  & 8036.30  & 18363.64  & \textbf{4667.36}  \\
+t+8  & 8664.76  & 321146.49  & 11021.05  & 23559.68  & \textbf{6996.31}  \\
+t+9  & 11158.90  & 404718.91  & 14378.82  & 29275.48  & \textbf{9918.20}  \\
+t+10  & 14496.56  & 491280.35  & 18289.84  & 35460.74  & \textbf{13485.37}  \\
+t+11  & 23138.72  & 576423.82  & 22957.92  & 42084.04  & \textbf{17764.39}  \\
+t+12  & 30214.23  & 657126.67  & 28640.91  & 49111.97  & \textbf{22813.85}  \\
+t+13  & 31631.31  & 731890.09  & 35426.79  & 56518.56  & \textbf{28674.62}  \\
+t+14  & \textbf{35259.75}  & 800494.33  & 43754.42  & 64287.18  & 35403.80  \\
+t+15  & \textbf{40408.07}  & 863565.80  & 53631.88  & 72402.00  & 43064.30  \\
+t+16  & 58149.26  & 921464.64  & 65350.45  & 80852.54  & \textbf{51702.90}  \\
+t+17  & \textbf{61342.09}  & 974841.72  & 78711.30  & 89619.17  & 61358.94  \\
+t+18  & \textbf{68141.14}  & 1023956.16  & 93916.81  & 98655.28  & 72039.27  \\
+t+19  & \textbf{71235.24}  & 1069203.40  & 111017.69  & 107930.08  & 83779.22  \\
+t+20  & \textbf{85740.06}  & 1110702.69  & 130151.32  & 117421.95  & 96596.31  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

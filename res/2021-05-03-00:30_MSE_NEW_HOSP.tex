@@ -1,0 +1,33 @@
+%2021-05-03-00:30_MSE_NEW_HOSP
+\begin{table}[H]
+\centering
+\caption{MSE when predicting new hospitalizations for the different models, for up to 20 horizons. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MSE_comparison}
+\begin{tabular}{lrrrrr}
+\toprule
+Horizon &  Linear Regression &  Assembled &  Encoder Decoder &  Baseline &  Dense \\
+\midrule
+t+1  & 391.46  & \textbf{59.94}  & 222.92  & 73.14  & 86.14  \\
+t+2  & 492.22  & \textbf{87.12}  & 320.51  & 102.75  & 104.01  \\
+t+3  & 609.51  & \textbf{111.85}  & 366.34  & 141.22  & 149.76  \\
+t+4  & 743.43  & \textbf{155.32}  & 384.11  & 185.76  & 177.73  \\
+t+5  & 889.95  & \textbf{193.79}  & 392.72  & 234.80  & 241.94  \\
+t+6  & 1047.22  & \textbf{247.98}  & 401.60  & 285.90  & 274.07  \\
+t+7  & 1212.55  & \textbf{293.86}  & 414.18  & 338.59  & 329.77  \\
+t+8  & 1374.49  & \textbf{321.59}  & 425.91  & 372.26  & 348.76  \\
+t+9  & 1547.61  & \textbf{350.47}  & 443.86  & 404.74  & 384.34  \\
+t+10  & 1727.18  & \textbf{378.84}  & 464.35  & 431.34  & 398.51  \\
+t+11  & 1914.02  & \textbf{400.86}  & 487.51  & 455.57  & 414.42  \\
+t+12  & 2107.33  & \textbf{435.76}  & 511.55  & 475.86  & 453.82  \\
+t+13  & 2308.40  & \textbf{443.95}  & 534.60  & 491.95  & 488.67  \\
+t+14  & 2520.25  & 452.70  & 559.27  & 507.55  & \textbf{451.17}  \\
+t+15  & 2740.34  & \textbf{486.91}  & 583.89  & 520.60  & 489.83  \\
+t+16  & 2970.92  & \textbf{465.69}  & 606.51  & 531.34  & 498.41  \\
+t+17  & 3212.92  & \textbf{481.45}  & 628.00  & 542.67  & 486.30  \\
+t+18  & 3463.04  & \textbf{491.46}  & 648.52  & 550.79  & 512.60  \\
+t+19  & 3723.53  & \textbf{505.94}  & 669.22  & 558.73  & 515.45  \\
+t+20  & 3994.57  & \textbf{484.54}  & 692.82  & 566.84  & 509.83  \\
+
+\bottomrule
+\end{tabular}
+\end{table}
