@@ -14,10 +14,10 @@ from bisect import bisect, bisect_left
 
 plot_example_dir = '../plot/examples'
 dir_tor_experiments = '../data/trends/tor_experiment'
-n_samples = 20
-n_forecast = 10
+n_samples = 30
+n_forecast = 20
 sample_test = 30  # number of test sample predicted on for the prediction on a horizon
-sample_train = 150  # number of training sample points used by a trainable model
+sample_train = 220  # number of training sample points used by a trainable model
 
 color_train = '#1f77b4'
 color_prediction = '#ff7f0e'
@@ -195,7 +195,38 @@ def plot_prediction_t_1():  # plot the predictions for t+1
     plot_prediction_dense_model_t_1()
 
 
+# ---------------- plot for the real predictions
+def real_predictions(file_pred):
+    file_true = "../res/True_y_values_last_walk_BE.csv"
+    prediction_df = pd.read_csv(file_pred)
+    true_df = pd.read_csv(file_true)
+
+    prediction_last_walk = prediction_df[prediction_df["Walk"] == "walk 6"]
+    prediction_last_walk = prediction_last_walk[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+    samples = true_df[:-len(prediction_last_walk)]
+    samples = samples[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+    print(samples)
+    true_forecast = true_df[-len(prediction_last_walk):]
+    true_forecast = true_forecast[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+
+    # Plot
+    fig = plt.figure(figsize=(5, 4))
+    plt.plot(samples, linestyle='-', marker='o', color=color_train, label='Value of the last days')
+    plt.plot(true_forecast, linestyle='', marker='o', color=color_actual, label=f'True value t+1')
+    plt.plot(prediction_last_walk, linestyle='', marker='X', color=color_prediction, label=f'Prediction t+1')
+    ax = fig.axes[0]
+    # set locator
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+    # set formatter
+    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt_finish()
+    plt.savefig(f'../plot/predictions/prediction_dense', dpi=200)
+
+
 # ---------------- plot for tor
+
 
 def tor_vs_local():  # comparison between tor queries and local queries
     def random_timeframe():
@@ -326,6 +357,9 @@ def plot_trends(df_plot, topic_code, show=True):
 
 if __name__ == '__main__':
     # tor_vs_local()
-    plot_tor_vs_local()
-    df = pd.read_csv('../data/trends/model/FR-B-Fièvre.csv', parse_dates=['date']).set_index('date')
-    plot_trends(df, df.columns[0])
+    #plot_tor_vs_local()
+    #df = pd.read_csv('../data/trends/model/FR-B-Fièvre.csv', parse_dates=['date']).set_index('date')
+    #plot_trends(df, df.columns[0])
+    file_pred = "../res/2021-05-21-16:25_get_dense_model_NEW_HOSP_prediction_BE.csv"
+    real_predictions(file_pred)
+    #print(df)
