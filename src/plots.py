@@ -196,16 +196,17 @@ def plot_prediction_t_1():  # plot the predictions for t+1
 
 
 # ---------------- plot for the real predictions
-def real_predictions(file_pred):
+def real_predictions_new(file_pred):
     file_true = "../res/True_y_values_last_walk_BE.csv"
     prediction_df = pd.read_csv(file_pred)
     true_df = pd.read_csv(file_true)
 
     prediction_last_walk = prediction_df[prediction_df["Walk"] == "walk 6"]
     prediction_last_walk = prediction_last_walk[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+
     samples = true_df[:-len(prediction_last_walk)]
     samples = samples[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
-    print(samples)
+
     true_forecast = true_df[-len(prediction_last_walk):]
     true_forecast = true_forecast[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
 
@@ -222,7 +223,46 @@ def real_predictions(file_pred):
     # set font and rotation for date tick labels
     plt.gcf().autofmt_xdate()
     plt_finish()
-    plt.savefig(f'../plot/predictions/prediction_dense', dpi=200)
+    plt.savefig(f'../plot/predictions/prediction_assembler_chap6', dpi=200)
+
+
+def real_predictions_tot(file_pred):
+    file_true = "../res/True_tot_hosp_values_last_walk_BE.csv"
+    prediction_df = pd.read_csv(file_pred)
+    true_df = pd.read_csv(file_true)
+
+    prediction_last_walk = prediction_df[prediction_df["Walk"] == "walk 6"]
+    prediction_last_walk = prediction_last_walk[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+
+    basic_tot = true_df[-len(prediction_last_walk)-1:]
+    basic_tot = basic_tot[["DATE", "TOT_HOSP(t+1)"]].set_index("DATE")
+    total_pred = []
+    for index, elem in enumerate(prediction_last_walk["NEW_HOSP(t+1)"]):
+        total_pred.append(elem + basic_tot["TOT_HOSP(t+1)"].values[index])
+
+    prediction_last_walk["TOT_HOSP(t+1)"] = total_pred
+    prediction_last_walk = prediction_last_walk.drop(columns=["NEW_HOSP(t+1)"])
+
+    samples = true_df[:-len(prediction_last_walk)]
+    samples = samples[["DATE", "TOT_HOSP(t+1)"]].set_index("DATE")
+
+    true_forecast = true_df[-len(prediction_last_walk):]
+    true_forecast = true_forecast[["DATE", "TOT_HOSP(t+1)"]].set_index("DATE")
+
+    # Plot
+    fig = plt.figure(figsize=(5, 4))
+    plt.plot(samples, linestyle='-', marker='o', color=color_train, label='Value of the last days')
+    plt.plot(true_forecast, linestyle='', marker='o', color=color_actual, label=f'True value t+1')
+    plt.plot(prediction_last_walk, linestyle='', marker='X', color=color_prediction, label=f'Prediction t+1')
+    ax = fig.axes[0]
+    # set locator
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+    # set formatter
+    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt_finish()
+    plt.savefig(f'../plot/predictions/prediction_assembler_tot', dpi=200)
 
 
 # ---------------- plot for tor
@@ -360,6 +400,7 @@ if __name__ == '__main__':
     #plot_tor_vs_local()
     #df = pd.read_csv('../data/trends/model/FR-B-Fièvre.csv', parse_dates=['date']).set_index('date')
     #plot_trends(df, df.columns[0])
-    file_pred = "../res/2021-05-21-16:25_get_dense_model_NEW_HOSP_prediction_BE.csv"
-    real_predictions(file_pred)
+    file_pred = "../res/2021-05-21-17:57_get_assembly_NEW_HOSP_prediction_BE.csv"
+    #real_predictions_tot(file_pred)
+    real_predictions_new(file_pred)
     #print(df)
