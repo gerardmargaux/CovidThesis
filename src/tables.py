@@ -4,7 +4,7 @@ import numpy as np
 import datetime
 import os
 import re
-from typing import Dict
+from typing import Dict, List
 
 res_dir = "../res"
 target_renaming = {
@@ -14,6 +14,7 @@ target_renaming = {
 
 model_renaming = {
     'assemble': 'Assembled',
+    'assembly': 'Assembled',
     'custom_linear_regression': 'Linear Regression',
     'dense_model': 'Dense',
     'encoder_decoder': 'Encoder Decoder',
@@ -153,6 +154,16 @@ def walk_table(model_file: str, error: str) -> str:
     search_obj = re.search(f'(TOT_HOSP|NEW_HOSP)', model_file)
     target = search_obj.group(1)
     df = pd.read_csv(f'{res_dir}/{model_file}.csv').rename(columns={'name': 'walk'})
+    walks = [i for i in df['walk']]
+    mean_included = False
+    for i in walks:
+        if "mean" in i:
+            mean_included = True
+            break
+    if not mean_included:  # append a row for the mean
+        mean = df.mean()
+        mean["walk"] = "mean"
+        df.loc[len(df.index)+1] = mean
     len_error = len(error)
     n_forecast = len([col for col in df.columns if col[:len_error] == error])
     columns_errors = [f'{error}(t+{i})' for i in range(1, n_forecast + 1)]
@@ -167,7 +178,7 @@ def walk_table(model_file: str, error: str) -> str:
     label = f'tab:{error}_walk_{model_name}'
     caption = f'{error} on each walk when predicting {target_renaming[target]} for the model, for up to {n_forecast} ' \
               f'horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. ' \
-              f'The dataset covered the {info["type_dataset"]}, composed of {info["n_init_regions"]} initial regions ' \
+              f'The training dataset covered the {info["type_dataset"]}, composed of {info["n_init_regions"]} initial regions ' \
               f'and {info["n_augmented_regions"]} augmented regions '
     if 'assemble' in model_file:
         nb_walks = int(len(df.columns) / 3) - 1
@@ -207,20 +218,27 @@ def mse_walk_table(model_file: str) -> str:
     return walk_table(model_file, 'MSE')
 
 
-def comparison_table(date: str, error: str) -> str:
+def comparison_table(date: str, error: str, file_list: Dict[str, str] = None) -> str:
     """
     write the comparison table for all models on the date given
     :param date: beginning of the files to search for, in the format YYYY-MM-DD-HH:MM
+    :param file_list: if not none, use the list of file provided rather than the date to generate the table
     :param error: error to use, must be registered as an error in the csv files
     """
     error_df = pd.DataFrame()
     columns_errors = []
     target = ''
     len_error = len(error)
-    for file in os.listdir(res_dir):
+    iterator = os.listdir(res_dir) if file_list is None else file_list
+    for file in iterator:
         # get the average of each model
-        search_obj = re.search(f'{date}_get_(.*)_(TOT_HOSP|NEW_HOSP).csv', file)
-        if search_obj is not None:
+        if file_list is None:
+            search_obj = re.search(f'{date}_get_(.*)_(TOT_HOSP|NEW_HOSP).csv', file)
+            cond = search_obj is not None
+        else:
+            search_obj = re.search(f'_get_(.*)_(TOT_HOSP|NEW_HOSP).csv', file)
+            cond = search_obj is not None and file in file_list
+        if cond:
             df = pd.read_csv(f'{res_dir}/{file}').rename(columns={'name': 'model', 'walk': 'model'}).set_index('model')
             # extract the error
             n_forecast = len([col for col in df.columns if col[:len_error] == error])
@@ -231,7 +249,7 @@ def comparison_table(date: str, error: str) -> str:
             else:  # verify that all models covered the same horizon
                 assert n_forecast == len(columns_errors), 'all models should have errors on the same horizon'
             entry = df.iloc[-1][columns_errors]#.reset_index()  # get the last row
-            entry['model'] = model_renaming[search_obj.group(1)]
+            entry['model'] = model_renaming[search_obj.group(1)] if file_list is None else file_list[file]
             #entry.set_index('model')
             error_df = error_df.append(entry)
     if not columns_errors:
@@ -280,7 +298,7 @@ def generate_all_tables_date(date: str):
     # generate the walks tables
     len_date = len(date)
     for file in os.listdir(res_dir):
-        if file[:len_date] == date and file[-4:] == '.csv':
+        if file[:len_date] == date and file[-4:] == '.csv' and 'prediction_BE' not in file:
             mae_walk_table(file[:-4])
             mse_walk_table(file[:-4])
             if 'assemble' in file:
@@ -299,6 +317,21 @@ def generate_all_tables():
             generate_all_tables_date(date)
 
 
+def custom_mae_table():
+    list_files = {
+        "2021-05-21-16:25_get_custom_linear_regression_NEW_HOSP.csv": "Linear Regression",
+        "2021-05-21-16:25_get_baseline_NEW_HOSP.csv": "Baseline",
+        "2021-05-21-16:25_get_dense_model_NEW_HOSP.csv": "Dense",
+        "2021-05-25-18:25_get_encoder_decoder_NEW_HOSP.csv": "Encoder trends",
+        "2021-05-25-19:48_get_encoder_decoder_NEW_HOSP.csv": "Encoder no trends",
+        "2021-05-21-17:57_get_assembly_NEW_HOSP.csv": "Assembler",
+
+    }
+    my_date = str(datetime.datetime.today()).replace(' ', '-')[:len_dates]
+    comparison_table(my_date, "MAE", list_files)
+
+
 if __name__ == '__main__':
-    generate_all_tables()
+    # generate_all_tables()
     # weights_assemble_table('2021-04-24-18:56_get_assemble_TOT_HOSP.txt')
+    custom_mae_table()

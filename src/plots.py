@@ -161,10 +161,10 @@ def plot_prediction_dense_model_t_1():
 
 # ---------------- generate the predictions of some models
 
-def prediction_linear_regression(x_train, nb_test):
-    axis = np.arange(len(x_train)).reshape(-1, 1)
-    regr = LinearRegression().fit(axis, x_train)
-    return regr.predict(np.arange(len(x_train), len(x_train) + nb_test).reshape(-1, 1))
+def prediction_linear_regression(x_train, nb_test, window=2):
+    axis = np.arange(len(x_train[-window:])).reshape(-1, 1)
+    regr = LinearRegression().fit(axis, x_train[-window:])
+    return regr.predict(np.arange(len(x_train[-window:]), len(x_train[-window:]) + nb_test).reshape(-1, 1))
 
 
 def prediction_baseline(x_train, nb_test):
@@ -228,8 +228,7 @@ def tor_vs_local():  # comparison between tor queries and local queries
             sleep_intermediate()
             errors = pytrends.nb_exception
             try:
-                pytrends.build_payload(search, cat=0, timeframe=random_timeframe(), geo=loc)
-                _ = pytrends.interest_over_time()
+                pytrends.get_interest_over_time(search, cat=0, timeframe=random_timeframe(), geo=loc)
             except Exception as err:
                 print(f'caught exception ({type(err)})')
                 sleep_error()
@@ -302,15 +301,18 @@ def plot_tor_vs_local():  # plot the comparison between tor queries and local qu
 
 # ---------------- plot for trends data
 
-def plot_trends(df_plot, topic_code, show=True):
-    fig = plt.figure()
+def plot_trends(df_plot, topic_code, show=True, figsize=None):
+    if figsize is None:
+        fig = plt.figure()
+    else:
+        fig = plt.figure(figsize=figsize)
     if isinstance(df_plot, list):
         list_df = df_plot
     else:
         list_df = [df_plot]
     for df in list_df:
         df_plot = 100 * df[[topic_code]] / df[[topic_code]].max()
-        plt.plot(df_plot, label="hourly data")
+        plt.plot(df_plot)
     ax = fig.axes[0]
     # set monthly locator
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
@@ -324,8 +326,205 @@ def plot_trends(df_plot, topic_code, show=True):
     return fig
 
 
+def plot_collection_methods():
+    # generate the model data using the different methods
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topic = {topic_name: topic_code}
+    geo_code, geo_name = 'BE', 'Belgium'
+    geo = {geo_code: geo_name}
+    begin = datetime.strptime('2020-02-01', trends_query.day_format)
+    end = datetime.strptime('2021-02-01', trends_query.day_format)
+    for method in ['daily', 'hourly', 'minimal']:
+        df = trends_query.generate_model_data(method, topic, geo, savefile=False)[geo_code][topic_name]
+        df = df[begin:end]
+        plot_trends(df, topic_code, show=False)
+        plt.tight_layout()
+        plt.savefig(f'{plot_example_dir}/{method}_collection', dpi=200)
+    df = pd.read_csv(f'../data/trends/samples/{geo_code}-{topic_name}_yearly.csv', parse_dates=['date'],
+                                         date_parser=trends_query.date_parser_daily).set_index('date')
+    df = df[begin:end]
+    plot_trends(df, topic_code, show=False)
+    plt.tight_layout()
+    plt.savefig(f'{plot_example_dir}/yearly_collection', dpi=200)
+
+
+def plot_hourly_collection():
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topic = {topic_name: topic_code}
+    geo_code, geo_name = 'BE', 'Belgium'
+    geo = {geo_code: geo_name}
+    begin = datetime.strptime('2020-02-01', trends_query.day_format)
+    end = datetime.strptime('2021-02-01', trends_query.day_format)
+    dirpath = trends_query.dir_hourly
+    filename = f'{geo_code}-{topic_name}.csv'
+    df = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
+                                         date_parser=trends_query.date_parser_hourly).set_index('date')
+    df = df[begin:end]
+    batches = sorted(df['batch_id'].unique(), key=lambda x: abs(x))
+    list_batch = []
+    for i in batches:
+        df_batch = df[df['batch_id'] == i]
+        list_batch.append(df_batch)
+    plot_trends(list_batch, topic_code, show=False, figsize=(6,3))
+    plt.tight_layout()
+    plt.savefig(f'{plot_example_dir}/hourly_method_batches', dpi=200)
+
+    list_df_hourly = trends_query.ModelData.scale_df(df, topic_code)  # scale the dataframe
+    plot_trends(list_df_hourly, topic_code, show=False, figsize=(6,3))
+    plt.tight_layout()
+    plt.savefig(f'{plot_example_dir}/hourly_method_scaled', dpi=200)
+
+    list_df_hourly = trends_query.HourlyModelData.drop_incomplete_days(
+        list_df_hourly)  # drop the incomplete days (check doc for details)
+    list_df_hourly = [df.resample('D').mean() for df in list_df_hourly]
+    plot_trends(list_df_hourly, topic_code, show=False, figsize=(6,3))
+    plt.tight_layout()
+    plt.savefig(f'{plot_example_dir}/hourly_method_resampled', dpi=200)
+
+
+def plot_mean_daily():
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topic = {topic_name: topic_code}
+    geo_code, geo_name = 'BE', 'Belgium'
+    geo = {geo_code: geo_name}
+    filename = f'{geo_code}-{topic_name}_daily.csv'
+    dirpath = '../data/trends/samples'
+    df = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
+                                         date_parser=trends_query.date_parser_daily).set_index('date')
+    val_min = np.ones(len(df)) * 100
+    val_max = np.zeros(len(df))
+    for column in df.columns:
+        if column != topic_code and column != 'batch_id':
+            val_min = np.minimum(val_min, df[column].array)
+            val_max = np.maximum(val_max, df[column].array)
+    val_min = pd.DataFrame(data=val_min, index=df.index)
+    val_max = pd.DataFrame(data=val_max, index=df.index)
+    mean = df[topic_code]
+    fig = plt.figure()
+    plt.plot(mean, label='Mean of 100 queries')
+    plt.plot(val_min, linestyle=':', color='r', label='Extremum between all queries')
+    plt.plot(val_max, linestyle=':', color='r')
+    ax = fig.axes[0]
+    # set monthly locator
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    # set formatter
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt.grid()
+    plt.legend()
+    plt.savefig(f'{plot_example_dir}/error_margin_daily', dpi=200)
+    # plot for convergence of error
+    list_df = []
+    for i in range(100):
+        column = [f'{topic_code}_{j}' for j in range(i)]
+        list_df.append(df[column].mean(axis=1))
+    error_list = []
+    for df_a, df_b in zip(list_df, list_df[1:]):
+        error_list.append(np.mean(abs(df_a - df_b)))
+    plt.figure(figsize=(4,3))
+    plt.plot(range(1, 100), error_list)
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(f'{plot_example_dir}/mean_daily', dpi=200)
+
+
+def plot_scale_df():
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topic = {topic_name: topic_code}
+    geo_code, geo_name = 'BE', 'Belgium'
+    geo = {geo_code: geo_name}
+    dirpath = '../data/trends/samples'
+    for method, date_parser in [('daily', trends_query.date_parser_daily), ('hourly', trends_query.date_parser_hourly)]:
+        filename = f'{geo_code}-{topic_name}_{method}_true.csv'
+        filename_1 = f'{geo_code}-{topic_name}_{method}_1.csv'
+        filename_2 = f'{geo_code}-{topic_name}_{method}_2.csv'
+
+        df = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
+                                             date_parser=date_parser).set_index('date')
+        df_1 = pd.read_csv(f'{dirpath}/{filename_1}', parse_dates=['date'],
+                                             date_parser=date_parser).set_index('date')
+        df_2 = pd.read_csv(f'{dirpath}/{filename_2}', parse_dates=['date'],
+                                             date_parser=date_parser).set_index('date')
+        df = df[[topic_code]]
+        df_1 = df_1[[topic_code]]
+        df_2 = df_2[[topic_code]]
+        fig = plt.figure()
+        plt.plot(df_1)
+        plt.plot(df_2)
+        ax = fig.axes[0]
+        # set monthly locator
+        if method == 'daily':
+            locator = mdates.MonthLocator(interval=1)
+        else:
+            locator = mdates.DayLocator(interval=1)
+        ax.xaxis.set_major_locator(locator)
+        # set formatter
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+        # set font and rotation for date tick labels
+        plt.gcf().autofmt_xdate()
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(f'{plot_example_dir}/trends_{method}_scaling_before', dpi=200)
+
+        fig = plt.figure()
+        df_scaled = trends_query.ModelData.merge_trends_batches(df_1, df_2, topic_code)
+        plt.plot(df, label='true request')
+        plt.plot(df_scaled, label='scaled request', linestyle='-.')
+        plt.legend()
+        ax = fig.axes[0]
+        # set monthly locator
+        ax.xaxis.set_major_locator(locator)
+        # set formatter
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+        # set font and rotation for date tick labels
+        plt.gcf().autofmt_xdate()
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(f'{plot_example_dir}/trends_{method}_scaling_after', dpi=200)
+
+
+def plot_adjacent_queries():
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topic = {topic_name: topic_code}
+    geo_code, geo_name = 'BE', 'Belgium'
+    geo = {geo_code: geo_name}
+    dirpath = '../data/trends/samples'
+    filename_1 = f'{geo_code}-{topic_name}_daily_left.csv'
+    filename_2 = f'{geo_code}-{topic_name}_daily_right.csv'
+    date_parser = trends_query.date_parser_daily
+    df_1 = pd.read_csv(f'{dirpath}/{filename_1}', parse_dates=['date'],
+                       date_parser=date_parser).set_index('date')
+    df_2 = pd.read_csv(f'{dirpath}/{filename_2}', parse_dates=['date'],
+                       date_parser=date_parser).set_index('date')
+    df_1 = df_1[[topic_code]]
+    df_2 = df_2[[topic_code]]
+    fig = plt.figure()
+    plt.plot(df_1)
+    plt.plot(df_2)
+    ax = fig.axes[0]
+    # set monthly locator
+    locator = mdates.MonthLocator(interval=1)
+    ax.xaxis.set_major_locator(locator)
+    # set formatter
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(f'{plot_example_dir}/adjacent_queries', dpi=200)
+
+
+
 if __name__ == '__main__':
     # tor_vs_local()
-    plot_tor_vs_local()
-    df = pd.read_csv('../data/trends/model/FR-B-Fièvre.csv', parse_dates=['date']).set_index('date')
-    plot_trends(df, df.columns[0])
+    # plot_tor_vs_local()
+    # df = pd.read_csv('../data/trends/model/FR-B-Fièvre.csv', parse_dates=['date']).set_index('date')
+    # plot_trends(df, df.columns[0])
+    # plot_collection_methods()
+    # plot_hourly_collection()
+    # plot_mean_daily()
+    # plot_scale_df()
+    # plot_adjacent_queries()
+    # plot_prediction_t_1()
+    plot_prediction()

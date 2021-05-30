@@ -306,7 +306,7 @@ class LocalTrendsRequest(TrendsRequest):
             try:
                 result = function()
                 return result
-            except (exceptions.ResponseError, ConnectionError, ReadTimeout, ConnectTimeout) as err:
+            except Exception as err:
                 print('exception')
                 self.nb_exception += 1
                 if self.nb_exception >= self.max_error:  # too many errors have been caught, stop the collect of data
@@ -380,13 +380,13 @@ class TorTrendsRequest(LocalTrendsRequest):
                         raise err
                     print('sleeping...', end='')
                     self.error_sleep()
-                    print('resuming', end='')
+                    print('resuming ', end='')
                     # certain probability of changing ip. The ip is not changed at every error caught in order to fool
                     # google trends
                     if random.randint(self.error_since_ip_change, self.error_since_ip_change + 2) >= self.error_change_ip:
                         self.get_new_ip()
                     return None
-            except TorIpError as err:  # error with tor, set a new tor ip changer
+            except (Exception) as err:  # error with tor, set a new tor ip changer
                 count_error += 1
                 self.nb_exception += 1
                 if count_error >= self.max_error:
@@ -733,7 +733,7 @@ class HourlyQueryBatch(QueryBatch):  # query batch using a hourly interval
 
     @classmethod
     def latest_day_available(cls):
-        latest = datetime.now().replace(microsecond=0, second=0, minute=0)
+        latest = datetime.now().replace(microsecond=0, second=0, minute=0) - timedelta(hours=1)
         if latest.hour != 23:
             latest = latest.replace(hour=23) - timedelta(days=1)
         return latest
@@ -1139,8 +1139,8 @@ class DailyQueryList(QueryList):  # query using the daily method
 
     def __init__(self, topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
                  begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 30, number: int = 2,
-                 cat: int = 0, gprop: str = '', savefile: bool = True, shuffle: bool = True):
-        super().__init__(topics, geo, dir_daily, trends_request, begin, end, DailyQuery, query_limit, overlap, number,
+                 cat: int = 0, gprop: str = '', savefile: bool = True, shuffle: bool = True, directory=dir_daily):
+        super().__init__(topics, geo, directory, trends_request, begin, end, DailyQuery, query_limit, overlap, number,
                          cat, gprop, savefile, shuffle)
 
 
@@ -1148,8 +1148,8 @@ class HourlyQueryList(QueryList):  # query using the hourly method
 
     def __init__(self, topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
                  begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 15, number: int = 1,
-                 cat: int = 0, gprop: str = '', savefile: bool = True, shuffle: bool = True):
-        super().__init__(topics, geo, dir_hourly, trends_request, begin, end, HourlyQuery, query_limit, overlap, number,
+                 cat: int = 0, gprop: str = '', savefile: bool = True, shuffle: bool = True, directory=dir_hourly):
+        super().__init__(topics, geo, directory, trends_request, begin, end, HourlyQuery, query_limit, overlap, number,
                          cat, gprop, savefile, shuffle)
 
 
@@ -1535,7 +1535,7 @@ class ModelData:  # base class used to generate model data
         self.topics = {} if topics is None else topics
         self.geo = {} if geo is None else geo
 
-    def generate_model_data(self):  # generate model data using available information
+    def generate_model_data(self, savefile=True) -> Dict:  # generate model data using available information
         raise NotImplementedError
 
     @staticmethod
@@ -1636,10 +1636,11 @@ class DailyModelData(ModelData):
         super().__init__(*args, **kwargs)
         self.directory = dir_daily
 
-    def generate_model_data(self):
+    def generate_model_data(self, savefile=True) -> Dict:
         """
         generate model data for the available queries, using the daily requests stored
         """
+        models = {}
         for (dirpath, dirnames, filenames) in os.walk(self.directory):
             for filename in filenames:
                 try:
@@ -1656,9 +1657,15 @@ class DailyModelData(ModelData):
                     model = list_df[0]
                     for df in list_df[1:]:
                         model = ModelData.merge_trends_batches(model, df, topic_code)
-                    #model.to_csv(f"{self.directory_model}/{filename}.csv")
+                    if geo in models:
+                        models[geo][topic_name] = model
+                    else:
+                        models[geo] = {topic_name: model}
+                    if savefile:
+                        model.to_csv(f"{self.directory_model}/{filename}.csv")
                 except (KeyError, AttributeError):
                     print(f'error when generating model data for {filename}')
+        return models
 
 
 class HourlyModelData(ModelData):
@@ -1668,11 +1675,12 @@ class HourlyModelData(ModelData):
         self.directory_hourly = dir_hourly
         self.directory_daily = dir_daily_gap
 
-    def generate_model_data(self):
+    def generate_model_data(self, savefile=True) -> Dict:
         """
         generate model data for the available queries, using the hourly requests stored and the daily gap requests stored
         for intervals where no data existed
         """
+        models = {}
         for (dirpath, dirnames, filenames) in os.walk(self.directory_hourly):
             for filename in filenames:
                 try:
@@ -1695,11 +1703,18 @@ class HourlyModelData(ModelData):
 
                     complete_df = HourlyModelData.merge_hourly_daily(list_df_hourly, list_daily_df, topic_code, drop=True)
                     filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
-                    complete_df.to_csv(filename)
+                    if geo in models:
+                        models[geo][topic_name] = complete_df
+                    else:
+                        models[geo] = {topic_name: complete_df}
+
+                    if savefile:
+                        complete_df.to_csv(filename)
                 except (KeyError, AttributeError):
                     print(f'error when generating model data for {filename}')
                 except ValueError:
                     print(f'error when generating model data for {filename}')
+        return models
 
     @staticmethod
     def drop_incomplete_days(list_df: List[pd.DataFrame]) -> List[pd.DataFrame]:
@@ -1721,8 +1736,8 @@ class HourlyModelData(ModelData):
             cur_df = df[new_begin:new_end]
             # check for chain of zeros at the beginning and the end
             has_zero = True
-            hours_drop = 10  # consecutive values to check
-            delta = timedelta(hours=hours_drop)
+            hours_drop = 11  # 5  # consecutive values to check
+            delta = timedelta(hours=hours_drop-1)
             while has_zero and new_begin < new_end:  # zeros at the beginning
                 if cur_df[new_begin:new_begin + delta].sum()[0] == 0:
                     new_begin += timedelta(days=1)
@@ -1843,13 +1858,14 @@ class MinimalModelData(ModelData):
         self.directory_hourly = dir_min_hourly
         self.directory_daily = dir_min_daily
 
-    def generate_model_data(self):
+    def generate_model_data(self, savefile=True) -> Dict:
         """
         generate model data for the available queries, using the hourly requests stored and the daily gap requests stored
         for intervals where no data existed
         """
         # list of [exceptions caught, files considered, [regions exceptions]]
         exceptions_topic = {topic: [0, 0, []] for topic in self.topics}
+        models = {}
         for (dirpath, dirnames, filenames) in os.walk(self.directory_hourly):
             for filename in filenames:
                 topic_code = None
@@ -1857,7 +1873,10 @@ class MinimalModelData(ModelData):
                 begin = None
                 end = None
                 geo = None
+                model = None
                 try:
+                    if 'COVID-19 testing' in filename:
+                        print('oh')
                     search_obj = re.match('([^_]*)-([^-_]*).csv', filename)
                     if search_obj is None:
                         continue
@@ -1888,34 +1907,42 @@ class MinimalModelData(ModelData):
                         print(f'error when generating model data from {filename}. Generating zero dataframe instead')
                         exceptions_topic[topic_name][0] += 1
                         exceptions_topic[topic_name][2].append(geo)
-                    model.to_csv(filename_model)
-
-
+                    if savefile:
+                     model.to_csv(filename_model)
                 except (KeyError, AttributeError, ValueError, IndexError):
                     print(f'error when generating model data from {filename}', end='')
                     if end is not None:
                         print('. Generating zero dataframe instead')
                         model = TrendsRequest.zero_dataframe([topic_code], begin, end).drop(columns=['isPartial'])
                         filename_model = f"{self.directory_model}/{geo}-{topic_name}.csv"
-                        model.to_csv(filename_model)
+                        if savefile:
+                            model.to_csv(filename_model)
                     else:
+                        model = pd.DataFrame()
                         print()
                     exceptions_topic[topic_name][0] += 1
                     exceptions_topic[topic_name][2].append(geo)
+                finally:
+                    if geo in models:
+                        models[geo][topic_name] = model
+                    else:
+                        models[geo] = {topic_name: model}
         for topic_name, (err, tot, loc) in exceptions_topic.items():
-            print(f'topic {topic_name}: {err}/{tot} errors', end='')
+            print(f'topic {topic_name}: {err}/{tot} error', end='s' if err != 0 else '')
             if err != 0:
-                print('(', end='')
+                print(' (', end='')
                 for i, region in enumerate(sorted(loc)):
                     print(region, end='' if i==err-1 else ', ')
                 print(')')
             else:
                 print()
+        return models
 
 
 def run_collect(trends_request, query_list):
     """
-    run a callable (QueryList or similar) several time until it is finished. Switch to Tor if an exception is thrown
+    run a callable (QueryList or similar: callable returning True when finished) several time until it is finished.
+    Switch to Tor if an exception is thrown
     :param trends_request: trends request instance to use for the collection of data
     :param collection: QueryList instance / callable instance to use. Must return False when it needs to be processed
         and True once it is done
@@ -1970,7 +1997,7 @@ def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None
     # trend_request = FakeTrendsRequest()  # use local queries for the beginning
     trends_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
     begin = datetime.strptime('2020-02-01', day_format)
-    end = datetime.strptime('2021-05-18T23', hour_format)
+    end = HourlyQueryBatch.latest_day_available()
     query_list = MinimalQueryList(topics, geo, trends_request, begin, end, savefile=True)
     run_collect(trends_request, query_list)
 
@@ -2002,11 +2029,11 @@ def collect_relevant_topics(topics: Dict[str, str] = None, geo: Dict[str, str]=N
     run_collect(trends_request, queries)
 
 
-def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None):
+def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None, savefile=True) -> Dict:
     """
     generate model data
     :param daily: whether to generate the model data using the daily method or not
-    :return: None. save the results to the data/trends/model folder
+    :return: Dict of {geo_code: {topic: df}} generated. save the results to the data/trends/model folder
     """
     if method == 'daily':
         model_data = DailyModelData(topics, geo)
@@ -2016,14 +2043,45 @@ def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo:
         model_data = MinimalModelData(topics, geo)
     else:
         raise Exception(f'unimplemented model generation ({method})')
-    model_data.generate_model_data()
+    models = model_data.generate_model_data(savefile)
+    return models
 
+
+def collect_for_plots():
+    begin = datetime.strptime('2020-06-01', day_format)
+    end = datetime.strptime('2020-09-30', day_format)
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topics = {topic_name: topic_code}
+    geo_code, geo_name = 'BE', 'Belgium'
+    geo = {geo_code: geo_name}
+    trends_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
+    query_batch = DailyQueryBatch(topic_code, geo_code, trends_request, begin, end, 1, number=1)
+    run_collect(trends_request, query_batch)
+    df = query_batch.get_df()
+    df = df.drop(columns=['batch_id'])
+    df.to_csv(f'../data/trends/samples/{geo_code}-{topic_name}_daily_right.csv')
+
+
+def nb_request_1_year():
+    begin = datetime.strptime('2020-02-01', day_format)
+    end = datetime.strptime('2021-02-01', day_format)
+    topic_name, topic_code = 'Fièvre', '/m/0cjf0'
+    topics = {topic_name: topic_code}
+    geo_code, geo_name = 'US', 'United States'
+    geo = {geo_code: geo_name}
+    trends_request = LocalTrendsRequest(max_errors=2)  # use local queries for the beginning
+    dummy = HourlyQuery(topic_name, topic_code, geo_code, trends_request, begin, end, dir_hourly, overlap=15)
+    print(len(dummy.list_dates()))
 
 if __name__ == '__main__':
-    topics = util.list_topics
-    geo = util.french_region_and_be
+    topics = util.list_topics_eu
+    geo = util.european_geocodes_1m
     # collect_minimal_data(topics, geo)
-    generate_model_data('minimal', topics, geo)
+    # generate_model_data('minimal', topics, geo)
     # collect_relevant_topics()
     # collect_data(False, topics, geo, False)
     # generate_model_data('daily', topics, geo)
+    # collect_for_plots()
+    nb_request_1_year()
+
+
