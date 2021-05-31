@@ -14,6 +14,41 @@ import networkx as nx
 from functools import reduce
 import requests
 import io
+import re
+
+
+# source: https://en.wikipedia.org/wiki/List_of_European_countries_by_population (UN estimate)
+european_population = {
+    'AT':  9_006_398,
+    'BE': 11_589_623,
+    'BG':  6_948_445,
+    'CY':  1_195_750,
+    'CZ': 10_729_333,
+    'DE': 83_783_942,
+    'DK':  5_805_607,
+    'EE':  1_330_299,
+    'ES': 46_811_531,
+    'FI':  5_548_480,
+    'FR': 65_273_511,
+    'GR': 10_391_029,
+    'HR':  4_086_308,
+    'HU':  9_646_008,
+    'IS':    343_008,
+    'IE':  4_992_908,
+    'IT': 60_461_826,
+    'LT':  2_690_259,
+    'LU':    635_755,
+    'LV':  1_870_386,
+    'MT':    514_564,
+    'NL': 17_161_189,
+    'NO':  5_449_099,
+    'PL': 37_830_336,
+    'PT': 10_175_378,
+    'RO': 19_126_264,
+    'SE': 10_147_405,
+    'SI':  2_080_044,
+    'SK':  5_463_818,
+}
 
 european_geocodes = {
     'AT': 'Austria',
@@ -47,6 +82,9 @@ european_geocodes = {
     'SI': 'Slovenia',
     'SK': 'Slovakia',
 }
+
+# population above 1m people
+european_geocodes_1m = {k: v for k, v in european_geocodes.items() if k not in european_population or european_population[k] > 1_000_000}
 
 french_region_and_be = {
     'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
@@ -165,66 +203,92 @@ france_region_adjacency = [
     ('FR-U', 'FR-V'),
 ]
 
-# source: https://en.wikipedia.org/wiki/List_of_European_countries_by_population (UN estimate)
-european_population = {
-    'AT': 9_006_398,
-    'BE': 11_589_623,
-    'BG': 6_948_445,
-    'CY': 1_195_750,
-    'CZ': 10_729_333,
-    'DE': 83_783_942,
-    'DK': 5_805_607,
-    'EE': 1_330_299,
-    'ES': 46_811_531,
-    'FI': 5_548_480,
-    'FR': 65_273_511,
-    'GR': 10_391_029,
-    'HR': 4_086_308,
-    'HU': 9_646_008,
-    'IS': 343_008,
-    'IE': 4_992_908,
-    'IT': 60_461_826,
-    'LT': 2_690_259,
-    'LU': 635_755,
-    'LV': 1_870_386,
-    'MT': 514_564,
-    'NL': 17_161_189,
-    'NO': 5_449_099,
-    'PL': 37_830_336,
-    'PT': 10_175_378,
-    'RO': 19_126_264,
-    'SE': 10_147_405,
-    'SI': 2_080_044,
-    'SK': 5_463_818,
-}
-
 list_topics = {
-    'Fièvre': '/m/0cjf0',
-    'Mal de gorge': '/m/0b76bty',
-    # 'Dyspnée': '/m/01cdt5',
-    # 'Agueusie': '/m/05sfr2',
-    # 'Anosmie': '/m/0m7pl',
-    'Virus': '/m/0g9pc',
-    'Épidémie': '/m/0hn9s',
-    'Symptôme': '/m/01b_06',
-    'Thermomètre': '/m/07mf1',
-    'Grippe espagnole': '/m/01c751',
-    'Paracétamol': '/m/0lbt3',
-    'Respiration': '/m/02gy9_',
-    'Toux': '/m/01b_21',
-    'PCR': '/m/05w_j',
-    'COVID 19 testing': '/g/11j8qdq0kc',
+    'Agueusie': '/m/05sfr2',
+    'Allergy': '/m/0fd23',
+    'Anosmie': '/m/0m7pl',
     'Coronavirus disease 2019': '/g/11j2cc_qll',
-    'Vaccination': '/g/121j1nlf',
+    'COVID 19 testing': '/g/11j8qdq0kc',
     'COVID 19 vaccine': '/g/11j8_9sv06',
     'Cure': '/m/0405g08',
+    'Dyspnée': '/m/01cdt5',
+    'Fièvre': '/m/0cjf0',
+    'Grippe espagnole': '/m/01c751',
+    'Mal de gorge': '/m/0b76bty',
+    'Paracétamol': '/m/0lbt3',
+    'PCR': '/m/05w_j',
+    'Respiration': '/m/02gy9_',
+    'Respiratory syncytial virus': '/m/02f84_',
+    'Severe acute respiratory syndrome coronavirus 2': '/g/11j4xt9hdf',
+    'Symptôme': '/m/01b_06',
+    'Thermomètre': '/m/07mf1',
+    'Toux': '/m/01b_21',
+    'Vaccination': '/g/121j1nlf',
+    'Virus': '/m/0g9pc',
+    'Épidémie': '/m/0hn9s',
+}
+
+list_topics_fr = {
+    'Agueusie': '/m/05sfr2',
     'Allergy': '/m/0fd23',
-    # 'Severe acute respiratory syndrome coronavirus 2': '/g/11j4xt9hdf',
+    'Anosmie': '/m/0m7pl',
+    'Coronavirus disease 2019': '/g/11j2cc_qll',
+    'COVID 19 testing': '/g/11j8qdq0kc',
+    'COVID 19 vaccine': '/g/11j8_9sv06',
+    'Cure': '/m/0405g08',
+    'Dyspnée': '/m/01cdt5',
+    'Fièvre': '/m/0cjf0',
+    'Grippe espagnole': '/m/01c751',
+    'Mal de gorge': '/m/0b76bty',
+    'Paracétamol': '/m/0lbt3',
+    'PCR': '/m/05w_j',
+    'Respiration': '/m/02gy9_',
     # 'Respiratory syncytial virus': '/m/02f84_',
+    # 'Severe acute respiratory syndrome coronavirus 2': '/g/11j4xt9hdf',
+    'Symptôme': '/m/01b_06',
+    'Thermomètre': '/m/07mf1',
+    'Toux': '/m/01b_21',
+    'Vaccination': '/g/121j1nlf',
+    'Virus': '/m/0g9pc',
+    'Épidémie': '/m/0hn9s',
+}
+
+list_topics_eu = {
+    'Agueusie': '/m/05sfr2',
+    'Allergy': '/m/0fd23',
+    'Anosmie': '/m/0m7pl',
+    'Coronavirus disease 2019': '/g/11j2cc_qll',
+    'COVID 19 testing': '/g/11j8qdq0kc',
+    'COVID 19 vaccine': '/g/11j8_9sv06',
+    'Cure': '/m/0405g08',
+    'Dyspnée': '/m/01cdt5',
+    'Fièvre': '/m/0cjf0',
+    'Grippe espagnole': '/m/01c751',
+    'Mal de gorge': '/m/0b76bty',
+    'Paracétamol': '/m/0lbt3',
+    'PCR': '/m/05w_j',
+    'Respiration': '/m/02gy9_',
+    'Respiratory syncytial virus': '/m/02f84_',
+    'Severe acute respiratory syndrome coronavirus 2': '/g/11j4xt9hdf',
+    'Symptôme': '/m/01b_06',
+    'Thermomètre': '/m/07mf1',
+    'Toux': '/m/01b_21',
+    'Vaccination': '/g/121j1nlf',
+    'Virus': '/m/0g9pc',
+    'Épidémie': '/m/0hn9s',
 }
 
 
-def log_values(df: pd.DataFrame, columns: list = None, base: int = 10, inf_value='drop') -> pd.DataFrame:
+def datetime_to_str(x: datetime, freq: str):
+    mapping = {
+        'M': lambda y: y.strftime('%b %Y'),
+        'W': lambda y: y.strftime('%Y week %U'),
+        'D': lambda y: y.strftime('%Y-%m-%d'),
+    }
+    return mapping[freq](x)
+
+
+def log_values(df: pd.DataFrame, columns: list = None, base: int = 10, inf_value=0) -> pd.DataFrame:
     """
     add log values to the dataframe
     :param df: dataframe to change
@@ -249,7 +313,7 @@ def log_values(df: pd.DataFrame, columns: list = None, base: int = 10, inf_value
     return df
 
 
-def pct_values(df: pd.DataFrame, columns: list = None, add_one: bool = False) -> pd.DataFrame:
+def pct_values(df: pd.DataFrame, columns: list = None, add_one: bool = False, threshold=0.5) -> pd.DataFrame:
     """
     add percentage values to the dataframe
     :param df: dataframe to change
@@ -464,12 +528,49 @@ def hospi_world(hospi_file: str, geo: Dict[str, str], renaming: Dict[str, str], 
     return data_dic
 
 
-def create_df_trends(url_trends: str, list_topics: Dict[str, str], geo: Dict[str, str]) -> Dict[str, pd.DataFrame]:
+def add_transformations(dict_df: Dict[str, pd.DataFrame], list_transformations: List[str]) -> Dict[str, pd.DataFrame]:
+    """
+    add a list of transformations to an existing dataframe, leading to newly created columns
+    :param dict_df: dict of loc: dataframe of data
+    :param list_transformations: list of transformations that needs to be performed
+        each transformation must be named as "feature_{transformation}"
+        accepted transformations are
+            - pct: for percentage change of the feature
+            - log: for log change of the feature
+        invalid format are ignored
+    :return: dict of transformed dataframe, with new features added
+    """
+    accepted_transformation = {
+        'pct': pct_values,
+        'log': log_values,
+    }
+    pattern_transformation = ''
+    for transformation in accepted_transformation:
+        pattern_transformation += '|' + transformation
+    pattern_transformation = pattern_transformation[1:]
+    for feat_transformation in list_transformations:
+        search_obj = re.search(f'(.*)_({pattern_transformation})', feat_transformation)
+        if search_obj is None:
+            continue
+        try:
+            feature = search_obj.group(1)
+            transformation = search_obj.group(2)
+            for loc, df in dict_df.items():
+                vals = accepted_transformation[transformation](df[[feature]])[feat_transformation]
+                df[feat_transformation] = vals
+        except:
+            continue
+    return dict_df
+
+
+def create_df_trends(url_trends: str, list_topics: Dict[str, str], geo: Dict[str, str],
+                     diff_trends: bool = False) -> Dict[str, pd.DataFrame]:
     """
     return dic of {geo: df} for the trends
     :param url_trends: path to the trends data folder
     :param list_topics: dict of topic title: topic code for each google trends
     :param geo: dict of geo localisations to use
+    :param diff_trends: whether to add relative augmentation of trends (.diff)
     """
     date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d")
     renaming = {v: k for k, v in list_topics.items()}  # change topic_mid to topic_title in the dataframe
@@ -490,6 +591,11 @@ def create_df_trends(url_trends: str, list_topics: Dict[str, str], geo: Dict[str
             df_trends['LOC'] = k
             df_trends.rename(columns=renaming, inplace=True)
             df_trends.set_index(['LOC', 'DATE'], inplace=True)
+            if diff_trends:
+                new_term = f'NEW_{term}'
+                new_trends = df_trends.diff().rename(columns={term: new_term})
+                new_trends.iloc[0] = 0
+                df_trends[new_term] = new_trends
             all_trends.append(df_trends)
         result[k] = pd.concat(all_trends, axis=1)
     return result
@@ -553,7 +659,7 @@ def region_merge_iterator(init_regions: List[str], nb_merge: int, adj: List[Tupl
     yield list of regions, supposed to be used to form augmented regions
     :param init_regions: list of regions to merge
     :param nb_merge: number of regions that can be used (at most) to create an augmented region. Must be >=2
-    :param adj: list of adjacency to use. If None, all regions will be mixed, even unadjacent. Otherwhise
+    :param adj: list of adjacency to use. If None, all regions will be mixed, even unadjacent. Otherwise
         use the list of adjacent region to augment the data
     :return: yield list of regions to merge
     """
@@ -595,7 +701,7 @@ class DataGenerator:
         """
         initialize a data generator. Takes a dict of {loc: dataframe} and use it to yield values suitable for training
         the data generator can augment the data by mixing regions together
-        the values are padded so that each region contains the same number of datapoints
+        the values are padded so that each region contains the same number of datapoints. Only the right padding information is stored
 
         :param df: dataframe of values to use in order to generate X and Y. Must be double indexed by loc and date
         :param n_samples: number of timesteps in X
@@ -605,11 +711,11 @@ class DataGenerator:
         :param scaler_type: one of "batch", "window", "whole"
         :param no_scaling: list of features that must not be scaled
         :param cumsum: if True, accumulates Y using cumsum
-        :param predict_one: if True, the target is Y at time n_forecast. Otherwhise, the target is Y in [t+1 ... t+n_forecast]
+        :param predict_one: if True, the target is Y at time n_forecast. Otherwise, the target is Y in [t+1 ... t+n_forecast]
         :param augment_merge: number of regions to merge in order to augment the data. If <=1, no data augmentation is performed
         :param augment_adjacency: use the list of adjacent region to augment the data. If None, all regions
             will be mixed, even unadjacent
-        :param augment_population: population of each region. Must not be None if augment_feature_pop contains value
+        :param augment_population: population of each region. Must not be None if augment_feature_pop contains values
         :param augment_feature_pop: list of features that should be weighted according to the population
         :param no_lag: if True, the dataframe will be considered as having the right format for training and add_lag
             will not be called on it
@@ -658,24 +764,26 @@ class DataGenerator:
         for k in df:
             if smallest_dates[k] > min_date:  # missing data at the beginning
                 date_range = pd.date_range(min_date, smallest_dates[k] - timedelta(days=1))
-                loc_padded_idx = np.array(range(len(date_range)))
+                # loc_padded_idx = np.array(range(len(date_range)))
                 nb_point = len(date_range)
                 zeros = np.zeros(nb_point)
                 pad_before = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]},
                                            **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
                 df[k] = pad_before.append(df[k])
             else:
-                loc_padded_idx = np.array([])
+                pass
+                # loc_padded_idx = np.array([])
             if highest_dates[k] < max_date:  # missing data at the end
                 date_range = pd.date_range(highest_dates[k] + timedelta(days=1), max_date)
-                loc_padded_idx = np.append(loc_padded_idx, range(len(df[k]), len(df[k]) + len(date_range)))
+                #loc_padded_idx = np.append(loc_padded_idx, range(len(df[k]), len(df[k]) + len(date_range)))
+                loc_padded_idx = np.arange(len(df[k]), len(df[k]) + len(date_range))
                 nb_point = len(date_range)
                 zeros = np.zeros(nb_point)
                 pad_after = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]},
                                           **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
                 df[k] = df[k].append(pad_after)
             else:
-                pass
+                loc_padded_idx = np.array([])
             self.padded_idx[k] = loc_padded_idx
 
         # augment the data
@@ -686,6 +794,8 @@ class DataGenerator:
                 augment_feature_no_pop = init_columns
             else:
                 augment_feature_no_pop = [col for col in init_columns if col not in augment_feature_pop]
+                # filter to only take the columns already present in the dataframe
+                augment_feature_pop = [i for i in augment_feature_pop if i in init_columns]
             for region_list in region_merge_iterator([loc for loc in df], augment_merge, augment_adjacency):
                 region_code = '-'.join(sorted(set(region_list)))
                 df[region_code] = sum(
@@ -707,6 +817,9 @@ class DataGenerator:
                                                               self.padded_idx[region_list[1]])
                 else:
                     self.padded_idx[region_code] = reduce(np.union1d, ([self.padded_idx[k] for k in region_list]))
+        # add data transformation
+        add_transformations(df, data_columns)
+
         self.loc_all = {**self.loc_init, **self.loc_augmented}
         self.df_init = df  # contains the augmented data with padding and without lagged values
         self.padded_idx_init = deepcopy(self.padded_idx)  # padded indexes before the add lag
@@ -725,19 +838,19 @@ class DataGenerator:
         # add lagged values
         if no_lag:  # the dataframe has already the right format
             self.df = df
-            self.date_range = pd.date_range(min_date, max_date)
+            self.date_range = pd.date_range(min_date, max_date).to_pydatetime()
             days_removed = 0  # no day as been removed
         else:  # the dataframe must be constructed across time
             if self.no_target:  # no target specified
                 self.df = {k: add_lag(v, - n_samples) for k, v in df.items()}
                 self.date_range = pd.date_range(min_date + timedelta(days=(n_samples - 1)),
-                                                max_date)
+                                                max_date).to_pydatetime()
                 days_removed = n_samples - 1
             else:  # a target exist
                 self.df = {k: add_lag(v, - n_samples).join(add_lag(v[[target]], n_forecast),
                                                            how='inner') for k, v in df.items()}
                 self.date_range = pd.date_range(min_date + timedelta(days=(n_samples - 1)),
-                                                max_date - timedelta(days=n_forecast))
+                                                max_date - timedelta(days=n_forecast)).to_pydatetime()
                 days_removed = n_forecast + n_samples - 1
         self.padded_idx = {k: (v - days_removed).astype(int) for k, v in self.padded_idx.items()}
 
@@ -1123,6 +1236,80 @@ class DataGenerator:
         info += f'regions = {list_regions}'
         return info
 
+    def time_idx(self, freq='M', format_date=False) -> List[Tuple[np.array, Union[datetime, str]]]:
+        """
+        give the indexes corresponding to time interval
+        :param freq: frequency for the time interval. supported:
+            - 'M': monthly data
+            - 'W': weekly data
+            - 'D': daily data
+        :param format_date: If True, transform the datetime into str, based on the freqency
+        :return: tuples of (datetime, array of indices)
+        """
+        def round_dates(x: Tuple[int, datetime]) -> Tuple[int, datetime]:
+            if freq == 'M':
+                begin_month = x[1].replace(microsecond=0, second=0, minute=0, hour=0, day=1)
+                return x[0], begin_month
+            elif freq == 'W':
+                return x[0], x[1] - timedelta(days=x[1].weekday())
+            elif freq == 'D':
+                return x
+            else:
+                raise ValueError(f'freq is not a valid value. Found: {freq}')
+
+        def aggregate_dates(x, y) -> List[List[Union[List[int], datetime]]]:
+            if isinstance(x, tuple):
+                x = [[[x[0]], x[1]]]
+            if x[-1][1] == y[1]:
+                x[-1][0].append(y[0])
+            else:
+                x.append([[y[0]], y[1]])
+            return x
+
+        def to_np_array(x):
+            for i in range(len(x)):
+                x[i][0] = np.array(x[i][0])
+                if format_date:
+                    x[i][1] = datetime_to_str(x[i][1], freq)
+            return x
+
+        return to_np_array(reduce(aggregate_dates, map(round_dates, [(i, j) for i, j in enumerate(self.date_range)])))
+
+    def walk_iterator(self, nb_test, periods_fit=0, periods_test=1, periods_eval=1, freq='M'):
+        """
+        iterate over indexes, giving a split for training, evaluation and test set
+        :param periods_eval: number of periods to use in evaluation set
+        :param periods_test: total number of periods that must be evaluated in the test set
+        :param freq: frequency of the split
+        :param periods_fit: number of periods to use in training set. 0 = use all periods at each iteration
+        :param nb_test: number of test periods included at each iteration. Default = 1 period per test set
+        :return:
+        """
+        time_idx = self.time_idx(freq, format_date=True)
+        nb_periods = len(time_idx)
+        idx_test = nb_periods - (periods_test * nb_test)
+        while idx_test < nb_periods:
+            test_set = time_idx[idx_test:idx_test+periods_test]
+            valid_set = time_idx[idx_test - periods_eval:idx_test]
+            if periods_fit == 0:
+                training_set = time_idx[:idx_test - periods_eval]
+            else:
+                training_set = time_idx[idx_test - periods_eval - periods_fit:idx_test - periods_eval]
+
+            sets = [[training_set, periods_fit], [valid_set, periods_eval], [test_set, periods_test]]
+            for i in range(3):
+                if sets[i][0]:
+                    set_array = np.concatenate([sets[i][0][j][0] for j in range(len(sets[i][0]))])
+                    if sets[i][1] > 1 or (i == 0 and sets[i][1] == 0):
+                        sets[i] = set_array, f'{sets[i][0][0][1]} - {sets[i][0][-1][1]}'
+                    else:
+                        sets[i] = set_array, sets[i][0][-1][1]
+                else:
+                    sets[i] = [np.array([]), '']
+
+            yield sets[0], sets[1], sets[2]
+            idx_test += periods_test
+
 
 class TestDataGenerator(unittest.TestCase):
 
@@ -1150,13 +1337,13 @@ class TestDataGenerator(unittest.TestCase):
         dg = DataGenerator(df_hospi, 20, 10, 'NEW_HOSP', scaler_generator=scaler_generator, scaler_type='batch')
         idx_begin = np.arange(100)
         X = dg.get_x(idx=idx_begin, scaled=True)
-        self.assertEqual(1, X.max())
-        self.assertEqual(0, X.min())
+        self.assertAlmostEqual(1, X.max())
+        self.assertAlmostEqual(0, X.min())
 
         idx_middle = np.arange(50, 120)
         X = dg.get_x(idx=idx_middle, scaled=True)
-        self.assertEqual(1, X.max())
-        self.assertEqual(0, X.min())
+        self.assertAlmostEqual(1, X.max())
+        self.assertAlmostEqual(0, X.min())
 
     def test_no_target(self):
         """
@@ -1179,104 +1366,65 @@ class TestDataGenerator(unittest.TestCase):
         self.assertEqual(batch_size_no_target, batch_size_target + n_forecast)
         self.assertTrue(dg_no_target.no_target)
 
+    def test_padding(self):
+        """
+        test if the indexes of padding are correct
+        """
+        msg_zero = "padding should not contain negative values"
+        msg_augmented = "padding of augmented regions should be union of regions composing it"
+        msg_unaugmented = "padding of unaugmented regions incorrect"
+        begin_a = datetime.strptime('2020-02-01', '%Y-%m-%d').date()
+        end_a = datetime.strptime('2020-06-01', '%Y-%m-%d').date()
+        begin_b = datetime.strptime('2020-01-01', '%Y-%m-%d').date()
+        end_b = datetime.strptime('2020-06-01', '%Y-%m-%d').date()
+        begin_c = datetime.strptime('2020-02-01', '%Y-%m-%d').date()
+        end_c = datetime.strptime('2020-07-01', '%Y-%m-%d').date()
+        begin_d = datetime.strptime('2020-01-01', '%Y-%m-%d').date()  # longest date range
+        end_d = datetime.strptime('2020-07-01', '%Y-%m-%d').date()
+        date_range_a = pd.date_range(begin_a, end_a)
+        date_range_b = pd.date_range(begin_b, end_b)
+        date_range_c = pd.date_range(begin_c, end_c)
+        date_range_d = pd.date_range(begin_d, end_d)  # longest date range
+        df_dict = {
+            'A': pd.DataFrame(data={'DATE': date_range_a, 'LOC': ['A' for _ in range(len(date_range_a))],
+                                       'val': np.arange(len(date_range_a))}).set_index(["LOC", "DATE"]),
+            'B': pd.DataFrame(data={'DATE': date_range_b, 'LOC': ['B' for _ in range(len(date_range_b))],
+                                       'val': np.arange(len(date_range_b))}).set_index(["LOC", "DATE"]),
+            'C': pd.DataFrame(data={'DATE': date_range_c, 'LOC': ['C' for _ in range(len(date_range_c))],
+                                       'val': np.arange(len(date_range_c))}).set_index(["LOC", "DATE"]),
+            'D': pd.DataFrame(data={'DATE': date_range_d, 'LOC': ['C' for _ in range(len(date_range_d))],
+                                       'val': np.arange(len(date_range_d))}).set_index(["LOC", "DATE"]),
+        }
+        n_forecast = 10
+        n_samples = 20
+        days_removed = n_samples + n_forecast - 1
+        dg = DataGenerator(df_dict, n_samples, n_forecast, 'val', MinMaxScaler, augment_merge=2)
+        padding = dg.padded_idx_init
+        for k in padding:
+            self.assertCountEqual(padding[k], list(filter(lambda x: x >= 0, padding[k])), msg_zero)
+        expected_padding_a = np.array([i for i, j in enumerate(date_range_d) if j > end_a])
+        expected_padding_b = np.array([i for i, j in enumerate(date_range_d) if j > end_a])
+        expected_padding_c = np.array([])
+        expected_padding_d = np.array([])
+        np.testing.assert_array_equal(padding['A'], expected_padding_a, msg_unaugmented)
+        np.testing.assert_array_equal(padding['B'], expected_padding_b, msg_unaugmented)
+        np.testing.assert_array_equal(padding['C'], expected_padding_c, msg_unaugmented)
+        np.testing.assert_array_equal(padding['D'], expected_padding_d, msg_unaugmented)
+        padding = dg.padded_idx
+        for k in padding:
+            self.assertCountEqual(padding[k], list(filter(lambda x: x >= 0, padding[k])), msg_zero)
+        np.testing.assert_array_equal(padding['A'], expected_padding_a - days_removed, msg_unaugmented)
+        np.testing.assert_array_equal(padding['B'], expected_padding_b - days_removed, msg_unaugmented)
+        np.testing.assert_array_equal(padding['C'], expected_padding_c, msg_unaugmented)
+        np.testing.assert_array_equal(padding['D'], expected_padding_d, msg_unaugmented)
+        np.testing.assert_array_equal(padding['A-B'], expected_padding_a - days_removed, msg_augmented)
+        np.testing.assert_array_equal(padding['A-C'], expected_padding_a - days_removed, msg_augmented)
+        np.testing.assert_array_equal(padding['A-D'], expected_padding_a - days_removed, msg_augmented)
+        np.testing.assert_array_equal(padding['B-C'], expected_padding_b - days_removed, msg_augmented)
+        np.testing.assert_array_equal(padding['B-D'], expected_padding_b - days_removed, msg_augmented)
+        np.testing.assert_array_equal(padding['C-D'], expected_padding_c, msg_augmented)
+
 
 if __name__ == "__main__":
-    # -----------------------------------------------------------------------------------------------------------------------------------------------------
-    # target, should be one of the hosp features
     unittest.main()
-    """
-    target = 'NEW_HOSP'
 
-    # topics considered
-    list_topics = {
-        #'Fièvre': '/m/0cjf0',
-        #'Mal de gorge': '/m/0b76bty',
-        #'Dyspnée': '/m/01cdt5',
-        #'Agueusie': '/m/05sfr2',
-        #'Anosmie': '/m/0m7pl',
-        #'Coronavirus': '/m/01cpyy',
-        #'Virus': '/m/0g9pc',
-        #'Température corporelle humaine': '/g/1213j0cz',
-        #'Épidémie': '/m/0hn9s',
-        #'Symptôme': '/m/01b_06',
-        #'Thermomètre': '/m/07mf1',
-        #'Grippe espagnole': '/m/01c751',
-        #'Paracétamol': '/m/0lbt3',
-        #'Respiration': '/m/02gy9_',
-        #'Toux': '/m/01b_21'
-    }
-
-    # hospitalisations features given as input
-    list_hosp_features = [
-        'NEW_HOSP',
-        'TOT_HOSP',
-        #'TOT_HOSP_log',
-        'TOT_HOSP_pct',
-    ]
-
-    europe = True  # if True, use european countries. Otherwise, use french regions and belgium
-
-    # features that should not be scaled
-    unscaled = [
-        #'NEW_HOSP',
-        #'TOT_HOSP',
-        #'TOT_HOSP_log',
-        'TOT_HOSP_pct',
-        #'Fièvre',
-        #'Mal de gorge',
-        #'Dyspnée',
-        #'Agueusie',
-        #'Anosmie',
-        #'Coronavirus',
-        #'Virus',
-        #'Température corporelle humaine',
-        #'Épidémie',
-        #'Symptôme',
-        #'Thermomètre',
-        #'Grippe espagnole',
-        #'Paracétamol',
-        #'Respiration',
-        #'Toux',
-    ]
-
-    date_begin = "2020-02-01"
-
-    url_world = "../data/hospi/world.csv"
-    url_pop = "../data/population.txt"
-    url_trends = "../data/trends/model/"
-    url_hospi_belgium = "../data/hospi/be-covid-hospi.csv"
-    url_department_france = "france_departements.csv"
-    url_hospi_france_new = "../data/hospi/fr-covid-hospi.csv"
-    url_hospi_france_tot = "../data/hospi/fr-covid-hospi-total.csv"
-    population = get_world_population(url_pop)
-    renaming = {v: k for k, v in european_geocodes.items()}
-    geocodes = {k: v for k, v in european_geocodes.items() if population[k] > 1_000_000}
-    df_hospi = hospi_world(url_world, geocodes, renaming, new_hosp=True, date_begin=date_begin)
-    scaler_generator = MinMaxScaler
-    augment_population = {k: v/1000 for k, v in population.items()}
-    dg = DataGenerator(df_hospi, 20, 10, 'NEW_HOSP', scaler_generator=scaler_generator, scaler_type='batch',
-                       augment_merge=3, augment_adjacency=european_adjacency, augment_population=augment_population,
-                       augment_feature_pop=['TOT_HOSP'])
-    my_idx = list(range(dg.batch_size))
-    y_unscaled = dg.get_y(scaled=False, idx=my_idx)
-    y_scaled = dg.get_y(scaled=True, idx=my_idx)
-    y_inverse_transf = dg.inverse_transform_y(y_scaled, idx=my_idx)
-    print(len(y_unscaled))
-    print(len(y_scaled))
-    print(np.allclose(y_inverse_transf, y_unscaled))
-    print(dg.X.shape)
-    print(dg.Y.shape)
-    print(dg.get_x_dates())
-    print(dg.get_y_dates())
-    print(dg.remove_padded_y(y_scaled, idx=my_idx, return_type='dict_df'))
-    ratio_training = 0.7
-    nb_datapoints = dg.batch_size
-    max_train = int(ratio_training * nb_datapoints)
-    train_idx = np.array(range(max_train))
-    test_idx = np.array(range(max_train, nb_datapoints))
-    X_train = dg.get_x(train_idx)
-    Y_train = dg.get_y(train_idx)
-    X_test = dg.get_x(test_idx)
-    Y_test = dg.get_y(test_idx)
-    print(dg.df)
-    """
