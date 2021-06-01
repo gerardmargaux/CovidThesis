@@ -1221,11 +1221,11 @@ class DataGenerator:
     def __str__(self):
         """
         contains informations about
-        - n_samples, n_forecast
-        - data columns
-        - target
-        - scaling done
-        - number of init and augmented regions, as well as their name
+            - n_samples, n_forecast
+            - data columns
+            - target
+            - scaling done
+            - number of init and augmented regions, as well as their name
         """
         info = f'n_samples = {self.n_samples}, n_forecast = {self.n_forecast}\n'
         info += f'data = {self.data_columns_t0}\n'
@@ -1236,26 +1236,45 @@ class DataGenerator:
         info += f'regions = {list_regions}'
         return info
 
-    def time_idx(self, freq='M', format_date=False) -> List[Tuple[np.array, Union[datetime, str]]]:
+    def time_idx(self, freq='M', format_date=False, boundary='inner') -> List[Tuple[np.array, Union[datetime, str]]]:
         """
         give the indexes corresponding to time interval
+
         :param freq: frequency for the time interval. supported:
             - 'M': monthly data
             - 'W': weekly data
             - 'D': daily data
-        :param format_date: If True, transform the datetime into str, based on the freqency
+        :param format_date: If True, transform the datetime into str, based on the frequency
+        :param boundary: tell how to proceed for boundary: dates with values overlapping on multiple interval. supported:
+            - 'inner': indices are split on dates where the n_forecast targets are in the next interval
+            - 'outer': indices are split on dates where the target at t+n_forecast is in the next interval
+            ex. with n_forecast = 2, freq='M':
+                t       t+1   t+2
+                29/01 | 30/01 31/01
+                 -----------------     outer split
+                30/01 | 31/01 01/02
+                 -----------------     inner split
+                31/01 | 01/02 02/02
         :return: tuples of (datetime, array of indices)
         """
         def round_dates(x: Tuple[int, datetime]) -> Tuple[int, datetime]:
+            if boundary == 'inner':
+                date_boundary = x[1] + timedelta(days=1)
+            elif boundary == 'outer':
+                date_boundary = x[1] + timedelta(days=self.n_forecast)
+            else:
+                raise ValueError(f'boundary is not a valid value. Found: {boundary}')
+
             if freq == 'M':
-                begin_month = x[1].replace(microsecond=0, second=0, minute=0, hour=0, day=1)
-                return x[0], begin_month
+                begin_month = date_boundary.replace(microsecond=0, second=0, minute=0, hour=0, day=1)
+                rounded = x[0], begin_month
             elif freq == 'W':
-                return x[0], x[1] - timedelta(days=x[1].weekday())
+                rounded = x[0], date_boundary - timedelta(days=date_boundary.weekday())
             elif freq == 'D':
-                return x
+                rounded = x
             else:
                 raise ValueError(f'freq is not a valid value. Found: {freq}')
+            return rounded
 
         def aggregate_dates(x, y) -> List[List[Union[List[int], datetime]]]:
             if isinstance(x, tuple):
@@ -1275,28 +1294,30 @@ class DataGenerator:
 
         return to_np_array(reduce(aggregate_dates, map(round_dates, [(i, j) for i, j in enumerate(self.date_range)])))
 
-    def walk_iterator(self, nb_test, periods_fit=0, periods_test=1, periods_eval=1, freq='M'):
+    def walk_iterator(self, nb_test, periods_train=0, periods_eval=1, periods_test=1, freq='M', boundary='inner'):
         """
         iterate over indexes, giving a split for training, evaluation and test set
+        :param nb_test: number of test periods included at each iteration. Default = 1 period per test set
+        :param periods_train: number of periods to use in training set. 0 = use all periods at each iteration
         :param periods_eval: number of periods to use in evaluation set
         :param periods_test: total number of periods that must be evaluated in the test set
         :param freq: frequency of the split
-        :param periods_fit: number of periods to use in training set. 0 = use all periods at each iteration
-        :param nb_test: number of test periods included at each iteration. Default = 1 period per test set
+        :param boundary: tell how to proceed for boundary: dates with values overlapping on multiple interval. cf time_idx
+            for details
         :return:
         """
-        time_idx = self.time_idx(freq, format_date=True)
+        time_idx = self.time_idx(freq, format_date=True, boundary=boundary)
         nb_periods = len(time_idx)
-        idx_test = nb_periods - (periods_test * nb_test)
+        idx_test = max(nb_periods - (periods_test * nb_test), periods_eval + periods_train)
         while idx_test < nb_periods:
             test_set = time_idx[idx_test:idx_test+periods_test]
             valid_set = time_idx[idx_test - periods_eval:idx_test]
-            if periods_fit == 0:
+            if periods_train == 0:
                 training_set = time_idx[:idx_test - periods_eval]
             else:
-                training_set = time_idx[idx_test - periods_eval - periods_fit:idx_test - periods_eval]
+                training_set = time_idx[idx_test - periods_eval - periods_train:idx_test - periods_eval]
 
-            sets = [[training_set, periods_fit], [valid_set, periods_eval], [test_set, periods_test]]
+            sets = [[training_set, periods_train], [valid_set, periods_eval], [test_set, periods_test]]
             for i in range(3):
                 if sets[i][0]:
                     set_array = np.concatenate([sets[i][0][j][0] for j in range(len(sets[i][0]))])

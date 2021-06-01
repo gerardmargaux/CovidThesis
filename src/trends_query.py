@@ -2073,15 +2073,15 @@ def nb_request_1_year():
     dummy = HourlyQuery(topic_name, topic_code, geo_code, trends_request, begin, end, dir_hourly, overlap=15)
     print(len(dummy.list_dates()))
 
+
 if __name__ == '__main__':
-    topics = util.list_topics_eu
-    geo = util.european_geocodes_1m
-    # collect_minimal_data(topics, geo)
-    # generate_model_data('minimal', topics, geo)
+    topics = util.list_topics_fr
+    geo = util.french_region_and_be
+    #collect_minimal_data(topics, geo)
+    generate_model_data('minimal', topics, geo)
     # collect_relevant_topics()
     # collect_data(False, topics, geo, False)
     # generate_model_data('daily', topics, geo)
     # collect_for_plots()
-    nb_request_1_year()
 
 
