@@ -1,0 +1,33 @@
+%2021-05-31-15:22_MAE_NEW_HOSP
+\begin{table}[H]
+\centering
+\caption{MAE when predicting new hospitalizations for the different models, for up to 20 horizons. Boldface indicates the best performance on each row. The dataset covered the European countries, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_comparison}
+\begin{tabular}{lrrrrr}
+\toprule
+Horizon &  Linear Regression &  Baseline &  Dense &  Encoder-decoder &  Assembler \\
+\midrule
+t+1  & 14.15  & 12.61  & 11.79  & 51.90  & \textbf{11.23}  \\
+t+2  & 25.20  & 21.02  & \textbf{18.87}  & 53.65  & 19.30  \\
+t+3  & 36.30  & 28.87  & \textbf{25.51}  & 56.39  & 26.77  \\
+t+4  & 46.76  & 36.08  & 33.28  & 58.96  & \textbf{32.47}  \\
+t+5  & 57.53  & 42.62  & 39.68  & 61.58  & \textbf{36.09}  \\
+t+6  & 67.99  & 49.06  & 46.30  & 64.68  & \textbf{39.87}  \\
+t+7  & 82.46  & 55.32  & 51.72  & 68.05  & \textbf{44.37}  \\
+t+8  & 93.24  & 60.56  & 56.59  & 71.38  & \textbf{47.47}  \\
+t+9  & 105.39  & 65.67  & 63.09  & 74.63  & \textbf{51.21}  \\
+t+10  & 117.12  & 70.67  & 64.09  & 77.70  & \textbf{54.66}  \\
+t+11  & 129.31  & 75.60  & 69.77  & 80.84  & \textbf{58.25}  \\
+t+12  & 141.10  & 80.43  & 74.34  & 83.98  & \textbf{61.55}  \\
+t+13  & 153.91  & 85.01  & 77.43  & 86.90  & \textbf{64.46}  \\
+t+14  & 167.02  & 89.36  & 82.31  & 89.53  & \textbf{67.66}  \\
+t+15  & 180.45  & 93.57  & 85.64  & 92.04  & \textbf{69.84}  \\
+t+16  & 193.30  & 97.64  & 87.97  & 94.24  & \textbf{71.70}  \\
+t+17  & 206.81  & 101.21  & 92.58  & 96.00  & \textbf{74.91}  \\
+t+18  & 220.26  & 104.54  & 95.27  & 97.42  & \textbf{77.33}  \\
+t+19  & 234.39  & 107.66  & 96.79  & 98.42  & \textbf{79.00}  \\
+t+20  & 247.44  & 110.60  & 97.86  & 99.20  & \textbf{80.78}  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

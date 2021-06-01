@@ -1,0 +1,15 @@
+def get_custom_linear_regression(window_size=2, *args, **kwargs):
+    model = LinearRegressionHospi(window_size)
+    model.compile(loss=tf.losses.MeanSquaredError(),
+                      metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    return model
+
+
+epochs = 3000, es_stop_val = False
+
+n_samples = 30, n_forecast = 20
+data = ['NEW_HOSP', 'TOT_HOSP', 'TOT_HOSP_log', 'TOT_HOSP_pct', 'Fièvre', 'Mal de gorge', 'Agueusie', 'Symptôme', 'NEW_Fièvre', 'NEW_Mal de gorge', 'NEW_Agueusie', 'NEW_Symptôme']
+target = NEW_HOSP
+scaling = <class 'sklearn.preprocessing._data.MinMaxScaler'>, scaling type = batch
+nb init regions = 23, nb augmented regions = 0
+regions = ['AT', 'BE', 'BG', 'CZ', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'HR', 'HU', 'IE', 'IT', 'LT', 'LV', 'NL', 'NO', 'PL', 'PT', 'SE', 'SI', 'SK']
