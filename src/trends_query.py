@@ -11,7 +11,7 @@ import random
 from collections import deque
 import re
 import time
-from functools import partial
+from functools import partial, reduce
 import requests
 import json
 from requests.packages.urllib3.util.retry import Retry
@@ -19,8 +19,10 @@ import util
 try:
     from toripchanger import TorIpChanger
     from toripchanger.exceptions import TorIpError
+    TorIpChanger(tor_password='my password', tor_port=9051,
+                 local_http_proxy='127.0.0.1:8118', new_ip_max_attempts=30, reuse_threshold=0)
     tor_ip_set = True
-except ImportError:
+except (ImportError, TorIpError):
     tor_ip_set = False
 
 dir_daily = "../data/trends/collect_daily"
@@ -33,6 +35,7 @@ dir_explore = "../data/trends/explore"
 day_format = "%Y-%m-%d"
 hour_format = "%Y-%m-%dT%H"
 max_query_days = 269
+google_trends_errors = (exceptions.ResponseError, ReadTimeout, ConnectTimeout, TorIpError)
 
 
 def date_to_datetime(x):
@@ -199,13 +202,14 @@ class LocalTrendsRequest(TrendsRequest):
         :param max_errors: max number of errors that can be processed. When max_errors errors have been caught, raise an
             error instead of sleeping the program
         """
+        super().__init__(*args, **kwargs)
         self.pytrends = self.setup_pytrends()
         self.kw_list = None
         self.timeframe = None
         self.geo = None
         self.max_error = max_errors
         self.verbose = verbose
-        super().__init__(*args, **kwargs)
+        self.error_interval = {}
 
     def setup_pytrends(self):
         while True:
@@ -235,23 +239,40 @@ class LocalTrendsRequest(TrendsRequest):
         error_before = self.nb_exception
         if self.verbose:
             print(f'query on {self.geo}: {self.kw_list} for {timeframe}... ', end='')
-        function = partial(self.pytrends.build_payload, kw_list, cat, timeframe, geo, gprop)
-        res = self._handle_errors(function)
-        if self.nb_exception == error_before:
-            self.intermediate_sleep()
-        function = partial(self.pytrends.interest_over_time)
-        df = self._handle_errors(function)
-        if df is None:
+        if self.timeframe not in self.error_interval:
+            self.error_interval[self.timeframe] = 0
+        #if self.error_interval[self.timeframe] > 2:
+        if False:
             if self.verbose:
-                print('failed')
-            return None
-        self.request_done += 1
-        if self.verbose:
-            print('retrieved')
+                print('ignoring time interval, ', end='')
+            df = pd.DataFrame()
+        else:
+            function = partial(self.pytrends.build_payload, kw_list, cat, timeframe, geo, gprop)
+            res = self._handle_errors(function)
+            if self.nb_exception == error_before:
+                self.intermediate_sleep()
+            else:
+                if self.verbose:
+                    print('failed')
+                return None
+            function = partial(self.pytrends.interest_over_time)
+            df = self._handle_errors(function)
+            if df is None:
+                if self.verbose:
+                    print('failed')
+                return None
+            self.request_done += 1
         if df.empty:
             begin, end = timeframe_to_date(self.timeframe)
+            self.error_interval[self.timeframe] += 1
             freq = 'H' if is_timeframe_hourly(self.timeframe) else 'D'
+            if self.verbose:
+                print('got empty dataframe')
             return TrendsRequest.zero_dataframe(self.kw_list, begin, end, freq=freq)
+        else:
+            self.error_interval[self.timeframe] -= 1
+        if self.verbose:
+            print('retrieved')
         return df
 
     def related_topics(self, kw_list, cat=0, timeframe='today 3-m', geo='', gprop=''):
@@ -276,9 +297,13 @@ class LocalTrendsRequest(TrendsRequest):
         res = self._handle_errors(function)
         if self.nb_exception == error_before:
             self.intermediate_sleep()
+        else:
+            if self.verbose:
+                print('failed')
+            return None
         function = partial(self.pytrends.related_topics)
         df = self._handle_errors(function)
-        if df is None:
+        if df is None or df.empty:
             if self.verbose:
                 print('failed')
             return None
@@ -308,6 +333,8 @@ class LocalTrendsRequest(TrendsRequest):
                 return result
             except Exception as err:
                 print('exception')
+                if isinstance(err, exceptions.ResponseError) and err.response.status_code == 500:
+                    return pd.DataFrame()
                 self.nb_exception += 1
                 if self.nb_exception >= self.max_error:  # too many errors have been caught, stop the collect of data
                     raise err
@@ -317,7 +344,7 @@ class LocalTrendsRequest(TrendsRequest):
                 return None
 
     def intermediate_sleep(self):  # sleep between 2 requests
-        time.sleep(random.uniform(1, 2 + self.nb_exception))
+        time.sleep(random.uniform(1, 2))
 
     def error_sleep(self):
         if self.nb_exception < 3:
@@ -330,10 +357,10 @@ class TorTrendsRequest(LocalTrendsRequest):
 
     def __init__(self, *args, **kwargs):
         self.tor_ip_changer = None
-        self.error_since_ip_change = 0  # errors since the last change of ip
-        self.error_change_ip = 3  # number of errors that must be reached in order to change ip (with a certain prob.)
         self.reset(True)
         super().__init__(*args, **kwargs)
+        self.error_since_ip_change = 0  # errors since the last change of ip
+        self.error_change_ip = 3  # number of errors that must be reached in order to change ip (with a certain prob.)
 
     def reset(self, first=False):  # set a new TorTrendReq instance and a new tor_ip_changer (with a new ip address)
         self.tor_ip_changer = TorIpChanger(tor_password='my password', tor_port=9051,
@@ -351,8 +378,9 @@ class TorTrendsRequest(LocalTrendsRequest):
             try:
                 self.tor_ip_changer.get_new_ip()
                 self.error_since_ip_change = 0
-                time.sleep(1)
+                self.intermediate_sleep()
                 print(f'tor ip for next requests = {self.current_tor_ip()}. ', end='')
+                self.intermediate_sleep()
                 pytrends = TorTrendReq()
                 running = False
             except (exceptions.ResponseError, ReadTimeout, ConnectTimeout) as err:
@@ -373,6 +401,9 @@ class TorTrendsRequest(LocalTrendsRequest):
                     result = function()
                     return result
                 except (exceptions.ResponseError, ReadTimeout, ConnectTimeout) as err:
+                    # timeframe not available
+                    if isinstance(err, exceptions.ResponseError) and err.response.status_code == 500:
+                        return pd.DataFrame()
                     count_error += 1
                     self.nb_exception += 1
                     self.error_since_ip_change += 1
@@ -408,11 +439,22 @@ class TorTrendsRequest(LocalTrendsRequest):
     def __str__(self):
         return super().__str__() + f'. Current tor ip = {self.current_tor_ip()}'
 
+    '''
     def error_sleep(self):  # sleep done when an error is encountered
         if self.nb_exception < 3:
             time.sleep(60 + random.uniform(30, 90))
         else:
             time.sleep(60 * random.randint(1, min(self.nb_exception, 5)) + random.uniform(30, 90))
+    '''
+
+    def intermediate_sleep(self):  # sleep between 2 requests
+        time.sleep(random.uniform(1, 2))
+
+    def error_sleep(self):  # sleep between 2 requests
+        if random.random() < 0.95:
+            self.intermediate_sleep()
+        else:
+            time.sleep(random.uniform(30, 45))
 
 
 class FakeTrendsRequest(TrendsRequest):  # for testing purposes, use fake trends
@@ -534,6 +576,12 @@ class QueryBatch:
         """
         raise NotImplementedError
 
+    def is_finished(self) -> bool:
+        raise NotImplementedError
+
+    def remaining(self) -> int:
+        raise NotImplementedError
+
     @classmethod
     def max_len(cls) -> int:  # max number of data points that can be queried with one request of this type
         raise NotImplementedError
@@ -595,22 +643,30 @@ class DailyQueryBatch(QueryBatch):
         select one interval of dates and fetch its data
         :return:
         """
-        begin, end = self.list_dates[self.date_idx]
-        timeframe = dates_to_timeframe(begin, end, hours=False)
-        df = self.fetch_data(timeframe)
-        if df is None:  # the request could not be fetched
+        if self.date_idx < self.number:
+            begin, end = self.list_dates[self.date_idx]
+            timeframe = dates_to_timeframe(begin, end, hours=False)
+            df = self.fetch_data(timeframe)
+            if df is None:  # the request could not be fetched
+                return False
+            df = df[self.begin:self.end]
+            if 100 not in df[self.kw]:
+                self.df[f'{self.kw}_{self.date_idx}'] = df[self.kw] * 100 / df[self.kw].max()
+            else:
+                self.df[f'{self.kw}_{self.date_idx}'] = df[self.kw]
+            self.date_idx += 1
+            if self.date_idx == self.number:  # no more dates to query
+                self.df[self.kw] = self.df.mean(axis=1)
+                self.df[self.kw] = 100 * self.df[self.kw] / self.df[self.kw].max()
+                return True
             return False
-        df = df[self.begin:self.end]
-        if 100 not in df[self.kw]:
-            self.df[f'{self.kw}_{self.date_idx}'] = df[self.kw] * 100 / df[self.kw].max()
-        else:
-            self.df[f'{self.kw}_{self.date_idx}'] = df[self.kw]
-        self.date_idx += 1
-        if self.date_idx == self.number:  # no more dates to query
-            self.df[self.kw] = self.df.mean(axis=1)
-            self.df[self.kw] = 100 * self.df[self.kw] / self.df[self.kw].max()
-            return True
-        return False
+        return True
+
+    def is_finished(self) -> bool:
+        return self.date_idx == self.number
+
+    def remaining(self) -> int:
+        return self.number - self.date_idx
 
     @classmethod
     def largest_dates_iterator(cls, begin: datetime, end: datetime, number: int) -> Tuple[datetime, datetime]:
@@ -768,6 +824,12 @@ class HourlyQueryBatch(QueryBatch):  # query batch using a hourly interval
                 self.batch_id = -self.batch_id
         return True
 
+    def is_finished(self) -> bool:
+        return not self.df.empty
+
+    def remaining(self) -> int:
+        return 1 - self.df.empty
+
 
 class Query:
     def __init__(self, topic_name: str, topic_code: str, geo: str, trends_request: TrendsRequest,
@@ -848,6 +910,12 @@ class Query:
                 return True
         return False
 
+    def is_finished(self):
+        return len(self.list_new_requests) == 0
+
+    def remaining(self):
+        return len(self.list_new_requests)
+
     def dates_interval_batches(self, begin, end) -> List[Tuple[datetime, datetime]]:
         """
         return the dates used to query the interval between begin and end. Each interval has an overlap of self.overlap
@@ -909,7 +977,8 @@ class Query:
             df_tot = df_tot
             # check if every query is present
             gb = df_tot.groupby('batch_id')
-            df_covered = sorted([df for _, df in gb], key=lambda x: abs(x.iloc[0]['batch_id']))
+            # df_covered = sorted([df for _, df in gb], key=lambda x: abs(x.iloc[0]['batch_id']))
+            df_covered = sorted([df for _, df in gb], key=lambda x: x.index.min())
             # append at the beginning if needed
             batch_id = 1
             if df_covered[0].index.min() > self.begin:  # need to provide queries earlier than what has been saved
@@ -952,12 +1021,15 @@ class Query:
                 batch_id += 1
             # append end if needed
             if df_covered[-1].index.max() < self.end:  # new queries must be made
+                dates_end = self.dates_interval_batches(df_covered[-1].index.max() - self.delta_overlap, self.end)
+                '''
                 if len(df_covered) == 1:  # there was only one existing dataframe, no need to drop it
                     dates_end = self.dates_interval_batches(df_covered[-1].index.max() - self.delta_overlap, self.end)
                 else:
                     valid_df.pop()  # remove the last dataframe
                     batch_id -= 1
                     dates_end = self.dates_interval_batches(valid_df[-1].index.max() - self.delta_overlap, self.end)
+                '''
                 for begin, end in dates_end:
                     self.list_new_requests.append(self.query_batch(self.topic_code, self.geo, self.trends_request,
                                                                    begin, end, batch_id, self.cat,
@@ -997,6 +1069,9 @@ class DailyQuery(Query):
         super().__init__(topic_name, topic_code, geo, trends_request, begin, end, directory, overlap, cat, number,
                          gprop, DailyQueryBatch, savefile, freq='D', shuffle=shuffle)
 
+    def remaining(self):
+        return reduce(lambda x, y: x + y.remaining(), self.list_new_requests, 0)
+
 
 class HourlyQuery(Query):
 
@@ -1011,7 +1086,7 @@ class QueryList:  # handle a list of queries
     def __init__(self, topics: Dict[str, str], geo: Dict[str, str], directory: str, trends_request: TrendsRequest,
                  begin: datetime, end: datetime, query: Type[Query] = DailyQuery, query_limit: int = 0,
                  overlap: int = 30, number: int = 1, cat: int = 0, gprop: str = '', savefile: bool = True,
-                 shuffle: bool = True):
+                 shuffle: bool = True, verbose=True):
         """
         :param topics: dict of topic_name, topic_code to query
         :param geo: dict of geo_code, geo_name to query
@@ -1044,10 +1119,12 @@ class QueryList:  # handle a list of queries
         self.gprop = gprop
         self.savefile = savefile
         self.shuffle = shuffle
+        self.verbose = verbose
         self.status = 'initialized'  # one of 'initialized', 'running', 'done'
         self.list_queries = deque()
         self.in_list = 0
         self.growth_iterator = self.growth_list_iterator()
+        self.max_processed = len(topics) * len(geo)
         self.nb_processed = 0  # number of query processed
         self.nb_sub_processed = 0  # number of subquery processed
         self.shuffle_cycle = 100  # every shuffle_cycle sub queries processed, shuffle the list again
@@ -1059,33 +1136,51 @@ class QueryList:  # handle a list of queries
         Choose a query at random and process it. If the query is finished, removes it from the list of queries
         :return True if all queries have been processed
         """
+        if self.verbose:
+            print('remaining calls:', self.remaining())
         if self.list_queries:  # there are queries awaiting
             empty_list = False
-            if self.shuffle:
-                # query = self.list_queries.pop()
-                query = self.list_queries[-1]
+            found_finished = True
+            query = None
+            ignored = -1
+            while found_finished and self.list_queries:  # check for queries that are already finished
+                if self.shuffle:
+                    # query = self.list_queries.pop()
+                    query = self.list_queries[-1]
+                    if query.is_finished():
+                        self.list_queries.pop()
+                    else:
+                        found_finished = False
+                else:
+                    # query = self.list_queries.popleft()
+                    query = self.list_queries[0]
+                    if query.is_finished():
+                        self.list_queries.popleft()
+                    else:
+                        found_finished = False
+                ignored += 1
+            self.nb_processed += ignored
+            if not self.list_queries:
+                empty_list = True
             else:
-                # query = self.list_queries.popleft()
-                query = self.list_queries[0]
-            query_finished = query()  # can throw an exception
-            if self.shuffle:
-                self.list_queries.pop()
-            else:
-                self.list_queries.popleft()
-            self.nb_sub_processed += 1
-            self.process_cycle += 1
-            if query_finished:
-                self.nb_processed += 1
-                self.in_list -= 1
-                if not self.list_queries:  # no more queries in the list
-                    empty_list = True
-                    if self.status == 'done':
-                        self.done()
-            else:
-                self.list_queries.appendleft(query)
-
-            if self.process_cycle % self.shuffle_cycle == 0 and self.shuffle:  # reshuffle the queries
-                random.shuffle(self.list_queries)
+                query_finished = query()  # can throw an exception
+                if self.shuffle:
+                    self.list_queries.pop()
+                else:
+                    self.list_queries.popleft()
+                self.nb_sub_processed += 1
+                self.process_cycle += 1
+                if query_finished:
+                    self.nb_processed += 1
+                    self.in_list -= 1
+                    if not self.list_queries:  # no more queries in the list
+                        empty_list = True
+                        if self.status == 'done':
+                            self.done()
+                else:
+                    self.list_queries.appendleft(query)
+                if self.process_cycle % self.shuffle_cycle == 0 and self.shuffle:  # reshuffle the queries
+                    random.shuffle(self.list_queries)
         else:  # no more queries in the list
             empty_list = True
         if empty_list:
@@ -1134,6 +1229,9 @@ class QueryList:  # handle a list of queries
         for query in self.list_queries:
             query.set_trends_request(trends_request)
 
+    def remaining(self):
+        return reduce(lambda x, y: x + y.remaining(), self.list_queries, 0)
+
 
 class DailyQueryList(QueryList):  # query using the daily method
 
@@ -1156,7 +1254,7 @@ class HourlyQueryList(QueryList):  # query using the hourly method
 class DailyGapQueryList(QueryList):
 
     def __init__(self, topics: Dict[str, str], geo: Dict[str, str], trends_request: TrendsRequest,
-                 begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 30, number: int = 20,
+                 begin: datetime, end: datetime, query_limit: int = 0, overlap: int = 30, number: int = 10,
                  cat: int = 0, gprop: str = '', savefile: bool = True, shuffle: bool = True):
         self.directory_hourly = dir_hourly
         self.files_remove = []
@@ -1952,7 +2050,7 @@ def run_collect(trends_request, query_list):
     while not finished:
         try:
             finished = query_list()
-        except:  # trends_request failed, using tor for the remaining requests
+        except google_trends_errors as err:  # trends_request failed, using tor for the remaining requests
             if tor_ip_set:
                 print('using tor')
                 trends_request = TorTrendsRequest(max_errors=np.inf)
@@ -1962,7 +2060,7 @@ def run_collect(trends_request, query_list):
     return trends_request
 
 
-def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str, str]=None, gap: bool = True):
+def collect_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None, gap: bool = True):
     """
     collect the google trends data
     :param daily: whether to collect the data using the daily method or not
@@ -1976,17 +2074,21 @@ def collect_data(daily: bool=True, topics: Dict[str, str] = None, geo: Dict[str,
     if geo is None:
         geo = util.french_region_and_be
 
-    trends_request = LocalTrendsRequest(max_errors=5)  # use local queries for the beginning
+    trends_request = TorTrendsRequest(max_errors=np.inf)  # use local queries for the beginning
     begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
-    end = datetime.strptime('2021-05-09T23', hour_format)
-    if daily:
+    if method == 'daily':
+        end = DailyQueryBatch.latest_day_available()
         query_list = DailyQueryList(topics, geo, trends_request, begin, end, number=10, savefile=True)
-    else:
+    elif method == 'hourly':
+        end = datetime.strptime('2021-05-31T23', hour_format)
         query_list = HourlyQueryList(topics, geo, trends_request, begin, end, number=1, savefile=True)
-    trends_request = run_collect(trends_request, query_list)
-    if not daily and gap:  # queries on the gap
+    elif method == 'minimal':
+        end = HourlyQueryBatch.latest_day_available()
+        query_list = MinimalQueryList(topics, geo, trends_request, begin, end, savefile=True)
+    elif method == 'gap':
+        end = datetime.strptime('2021-05-31T23', hour_format)
         query_list = DailyGapQueryList(topics, geo, trends_request, begin, end, number=20, savefile=True)
-        run_collect(trends_request, query_list)
+    trends_request = run_collect(trends_request, query_list)
 
 
 def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None):
@@ -2075,13 +2177,39 @@ def nb_request_1_year():
 
 
 if __name__ == '__main__':
-    topics = util.list_topics_fr
-    geo = util.french_region_and_be
-    #collect_minimal_data(topics, geo)
-    generate_model_data('minimal', topics, geo)
+    topics = util.list_topics_fr_hourly
+    geo = {
+        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-C': "Auvergne-Rhône-Alpes",
+        'FR-P': "Normandie",
+        'FR-D': "Bourgogne-Franche-Comté",
+        'FR-E': 'Bretagne',
+        'FR-F': 'Centre-Val de Loire',
+        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-H': 'Corse',
+        'FR-I': "Bourgogne-Franche-Comté",
+        'FR-Q': "Normandie",
+    }
+    '''
+    {
+        'FR-J': 'Ile-de-France',
+        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
+        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
+        'FR-O': 'Nord-Pas-de-Calais-Picardie',
+        'FR-R': 'Pays de la Loire',
+        'FR-S': 'Nord-Pas-de-Calais-Picardie',
+        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
+        'FR-U': "Provence-Alpes-Côte d'Azur",
+        'FR-V': "Auvergne-Rhône-Alpes",
+        'BE': "Belgique",
+    }
+    '''
+    collect_data('hourly', topics, geo)
+    # generate_model_data('minimal', topics, geo)
     # collect_relevant_topics()
-    # collect_data(False, topics, geo, False)
-    # generate_model_data('daily', topics, geo)
     # collect_for_plots()
 
 

@@ -253,6 +253,31 @@ list_topics_fr = {
     'Épidémie': '/m/0hn9s',
 }
 
+list_topics_fr_hourly = {
+    # 'Agueusie': '/m/05sfr2',
+    'Allergy': '/m/0fd23',
+    # 'Anosmie': '/m/0m7pl',
+    'Coronavirus disease 2019': '/g/11j2cc_qll',
+    'COVID 19 testing': '/g/11j8qdq0kc',
+    'COVID 19 vaccine': '/g/11j8_9sv06',
+    'Cure': '/m/0405g08',
+    # 'Dyspnée': '/m/01cdt5',
+    'Fièvre': '/m/0cjf0',
+    # 'Grippe espagnole': '/m/01c751',
+    'Mal de gorge': '/m/0b76bty',
+    # 'Paracétamol': '/m/0lbt3',
+    'PCR': '/m/05w_j',
+    # 'Respiration': '/m/02gy9_',
+    # 'Respiratory syncytial virus': '/m/02f84_',
+    # 'Severe acute respiratory syndrome coronavirus 2': '/g/11j4xt9hdf',
+    'Symptôme': '/m/01b_06',
+    # 'Thermomètre': '/m/07mf1',
+    'Toux': '/m/01b_21',
+    'Vaccination': '/g/121j1nlf',
+    'Virus': '/m/0g9pc',
+    # 'Épidémie': '/m/0hn9s',
+}
+
 list_topics_eu = {
     'Agueusie': '/m/05sfr2',
     'Allergy': '/m/0fd23',
@@ -1294,13 +1319,14 @@ class DataGenerator:
 
         return to_np_array(reduce(aggregate_dates, map(round_dates, [(i, j) for i, j in enumerate(self.date_range)])))
 
-    def walk_iterator(self, nb_test, periods_train=0, periods_eval=1, periods_test=1, freq='M', boundary='inner'):
+    def walk_iterator(self, nb_test, periods_train=0, periods_eval=1, periods_test=1,
+                      shift_test:int = 1, freq='M', boundary='inner'):
         """
         iterate over indexes, giving a split for training, evaluation and test set
-        :param nb_test: number of test periods included at each iteration. Default = 1 period per test set
+        :param nb_test: total number of periods that must be evaluated in the test set
         :param periods_train: number of periods to use in training set. 0 = use all periods at each iteration
         :param periods_eval: number of periods to use in evaluation set
-        :param periods_test: total number of periods that must be evaluated in the test set
+        :param periods_test: number of test periods included at each iteration. Default = 1 period per test set
         :param freq: frequency of the split
         :param boundary: tell how to proceed for boundary: dates with values overlapping on multiple interval. cf time_idx
             for details
@@ -1308,8 +1334,8 @@ class DataGenerator:
         """
         time_idx = self.time_idx(freq, format_date=True, boundary=boundary)
         nb_periods = len(time_idx)
-        idx_test = max(nb_periods - (periods_test * nb_test), periods_eval + periods_train)
-        while idx_test < nb_periods:
+        idx_test = max(nb_periods - nb_test * shift_test - periods_test + 1, periods_eval + periods_train)
+        while idx_test + periods_test <= nb_periods:
             test_set = time_idx[idx_test:idx_test+periods_test]
             valid_set = time_idx[idx_test - periods_eval:idx_test]
             if periods_train == 0:
@@ -1329,7 +1355,7 @@ class DataGenerator:
                     sets[i] = [np.array([]), '']
 
             yield sets[0], sets[1], sets[2]
-            idx_test += periods_test
+            idx_test += shift_test
 
 
 class TestDataGenerator(unittest.TestCase):

@@ -14,6 +14,7 @@ from bisect import bisect, bisect_left
 
 plot_example_dir = '../plot/examples'
 dir_tor_experiments = '../data/trends/tor_experiment'
+dir_results = '../res'
 n_samples = 20
 n_forecast = 10
 sample_test = 30  # number of test sample predicted on for the prediction on a horizon
@@ -265,8 +266,69 @@ def real_predictions_tot(file_pred):
     plt.savefig(f'../plot/predictions/prediction_assembler_tot', dpi=200)
 
 
-# ---------------- plot for tor
+def plot_assembly_real_prediction(name_assembly_file: str, date: str):
+    threshold = 0.3
+    pred_file_init = f'{dir_results}/{name_assembly_file}_prediction_init_BE.csv'
+    pred_file_assembly = f'{dir_results}/{name_assembly_file}_prediction_BE.csv'
+    pred_file_c = f'{dir_results}/{name_assembly_file}_prediction_c_BE.csv'
+    try:
+        pred_df_init = pd.read_csv(pred_file_init)
+        pred_df_assembly = pd.read_csv(pred_file_assembly)
+        pred_df_c = pd.read_csv(pred_file_c)
+    except FileNotFoundError:
+        print(f'assembly file {name_assembly_file} not found')
+        return
+    columns = [i for i in pred_df_init.columns if '(t+' in i]
+    columns_c = [i for i in pred_df_c.columns if '(t+' in i]
+    begin = datetime.strptime(date, '%Y-%m-%d')
+    date_range = pd.date_range(begin, begin + timedelta(days=len(columns)-1))
+    pred_df_init = pred_df_init[pred_df_init['DATE'] == date][columns]
+    pred_df_assembly = pred_df_assembly[pred_df_assembly['DATE'] == date][columns]
+    pred_df_c = pred_df_c[pred_df_c['DATE'] == date][columns_c]
 
+    url_world = "../data/hospi/world.csv"
+    url_pop = "../data/population.txt"
+    url_trends = "../data/trends/model/"
+    url_hospi_belgium = "../data/hospi/be-covid-hospi.csv"
+    url_department_france = "france_departements.csv"
+    url_hospi_france_new = "../data/hospi/fr-covid-hospi.csv"
+    url_hospi_france_tot = "../data/hospi/fr-covid-hospi-total.csv"
+    df_hospi = util.hospi_french_region_and_be(url_hospi_france_tot, url_hospi_france_new, url_hospi_belgium,
+                                           url_department_france, util.french_region_and_be, new_hosp=True,
+                                           tot_hosp=True)['BE']
+    df_hospi = df_hospi.reset_index().set_index('DATE')
+    df_hospi = df_hospi.rolling(7, center=True).mean().dropna()
+    target = df_hospi.loc[date_range]['NEW_HOSP']
+
+    val = pred_df_init.values.reshape((-1, 1))
+    pred_init = pd.DataFrame(data=val, index=date_range)
+    val = pred_df_c.values.reshape((-1, 1))
+    pred_c = pd.DataFrame(data=val, index=date_range)
+    val = pred_df_assembly.values.reshape((-1, 1))
+    pred_assembly = pd.DataFrame(data=val, index=date_range)
+
+    fig = plt.figure(figsize=(5, 4))
+    difference = pred_assembly - pred_init
+    uplims = [j[0] > 0 for i, j in pred_init.iterrows()]
+    lolims = [not i for i in uplims]
+    difference = abs(difference).values.reshape(len(columns))
+    x = pred_init.index
+    pred_init = pred_init.values.reshape(len(columns))
+    pred_assembly = pred_assembly.values.reshape(len(columns))
+    plt.plot(x, pred_init, linestyle='-', marker='o', color=color_train, label='Initial prediction')
+    plt.plot(x, pred_assembly, linestyle='', marker='X', color=color_prediction, label=f'Corrected prediction')
+    plt.plot(target, linestyle='', marker='o', color=color_actual, label=f'True value')
+    ax = fig.axes[0]
+    ax.fill_between(x, pred_init - difference, pred_init + difference, alpha=0.2, interpolate=True, label='Correction range')
+    # set locator
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    # set font and rotation for date tick labels
+    plt.gcf().autofmt_xdate()
+    plt_finish()
+    plt.savefig(f'../plot/predictions/prediction_assembler_behavior', dpi=200)
+
+
+# ---------------- plot for tor
 def tor_vs_local():  # comparison between tor queries and local queries
     def random_timeframe():
         end_date = date(year=random.randint(2006, 2020), month=random.randint(1, 12), day=random.randint(1, 28))
@@ -585,7 +647,6 @@ def plot_adjacent_queries():
     plt.savefig(f'{plot_example_dir}/adjacent_queries', dpi=200)
 
 
-
 if __name__ == '__main__':
     # tor_vs_local()
     # plot_tor_vs_local()
@@ -597,4 +658,5 @@ if __name__ == '__main__':
     # plot_scale_df()
     # plot_adjacent_queries()
     # plot_prediction_t_1()
-    plot_prediction()
+    # plot_prediction()
+    plot_assembly_real_prediction('2021-06-02-11:26_get_assembly_NEW_HOSP', '2021-04-20')

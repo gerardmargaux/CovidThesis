@@ -13,14 +13,23 @@ target_renaming = {
 }
 
 model_renaming = {
-    'assemble': 'Assembled',
-    'assembly': 'Assembled',
-    'custom_linear_regression': 'Linear Regression',
-    'dense_model': 'Dense',
-    'encoder_decoder': 'Encoder Decoder',
-    'baseline': 'Baseline'
+    **{
+        'assemble': 'Assembled',
+        'assembly': 'Assembled',
+        'custom_linear_regression': 'Linear Regression',
+        'dense_model': 'Dense',
+        'encoder_decoder': 'Encoder Decoder',
+        'baseline': 'Baseline'
+    },
+    **{
+        'assembly_0': f'LR + Dense',
+        'assembly_1': f'LR + E-D',
+        'assembly_2': f'Baseline + Dense',
+    }
 }
 len_dates = 16  # len of the format 'YYYY-MM-DD-HH:MM'
+date_format = '(\d{4}-\d{2}-\d{2}-\d{2}:\d{2})'
+model_format = '(\d{4}-\d{2}-\d{2}-\d{2}:\d{2}_get_)'
 
 
 def weights_assemble_table(info_file: str):
@@ -153,8 +162,11 @@ def walk_table(model_file: str, error: str) -> str:
     """
     search_obj = re.search(f'(TOT_HOSP|NEW_HOSP)', model_file)
     target = search_obj.group(1)
-    df = pd.read_csv(f'{res_dir}/{model_file}.csv').rename(columns={'name': 'walk'})
-    walks = [i for i in df['walk']]
+    df = pd.read_csv(f'{res_dir}/{model_file}.csv').rename(columns={'name': 'Period', 'walk': 'Period'})
+    try:
+        walks = [i for i in df['Period']]
+    except:
+        print('oh')
     mean_included = False
     for i in walks:
         if "mean" in i:
@@ -168,7 +180,7 @@ def walk_table(model_file: str, error: str) -> str:
     n_forecast = len([col for col in df.columns if col[:len_error] == error])
     columns_errors = [f'{error}(t+{i})' for i in range(1, n_forecast + 1)]
     renaming_horizon = {col: f't+{i+1}' for i, col in enumerate(columns_errors)}
-    renaming = {**renaming_horizon, **{'walk': 'Horizon'}}
+    renaming = {**renaming_horizon, **{'Period': 'Horizon'}}
     df = df.rename(columns=renaming).set_index('Horizon')[renaming_horizon.values()]
     df = df.transpose()
     info_file = f'{res_dir}/{model_file}.txt'
@@ -230,6 +242,8 @@ def comparison_table(date: str, error: str, file_list: Dict[str, str] = None) ->
     target = ''
     len_error = len(error)
     iterator = os.listdir(res_dir) if file_list is None else file_list
+    if date == '2021-05-25-21:00':
+        print('error')
     for file in iterator:
         # get the average of each model
         if file_list is None:
@@ -239,7 +253,7 @@ def comparison_table(date: str, error: str, file_list: Dict[str, str] = None) ->
             search_obj = re.search(f'_get_(.*)_(TOT_HOSP|NEW_HOSP).csv', file)
             cond = search_obj is not None and file in file_list
         if cond:
-            df = pd.read_csv(f'{res_dir}/{file}').rename(columns={'name': 'model', 'walk': 'model'}).set_index('model')
+            df = pd.read_csv(f'{res_dir}/{file}').rename(columns={'name': 'model', 'walk': 'model', 'Period': 'model'}).set_index('model')
             # extract the error
             n_forecast = len([col for col in df.columns if col[:len_error] == error])
             if not columns_errors:  # first csv file found
@@ -298,7 +312,7 @@ def generate_all_tables_date(date: str):
     # generate the walks tables
     len_date = len(date)
     for file in os.listdir(res_dir):
-        if file[:len_date] == date and file[-4:] == '.csv' and 'prediction_BE' not in file:
+        if file[:len_date] == date and file[-4:] == '.csv' and 'prediction' not in file and '_get_' in file:
             mae_walk_table(file[:-4])
             mse_walk_table(file[:-4])
             if 'assemble' in file:
@@ -312,7 +326,7 @@ def generate_all_tables():
     list_date = set()
     for file in os.listdir(res_dir):
         date = file[:len_dates]
-        if date not in list_date:
+        if date not in list_date and re.search(model_format, file) is not None:
             list_date.add(date)
             generate_all_tables_date(date)
 
@@ -325,13 +339,13 @@ def custom_mae_table():
         "2021-05-25-18:25_get_encoder_decoder_NEW_HOSP.csv": "Encoder trends",
         "2021-05-25-19:48_get_encoder_decoder_NEW_HOSP.csv": "Encoder no trends",
         "2021-05-21-17:57_get_assembly_NEW_HOSP.csv": "Assembler",
-
     }
     my_date = str(datetime.datetime.today()).replace(' ', '-')[:len_dates]
     comparison_table(my_date, "MAE", list_files)
 
 
 if __name__ == '__main__':
-    # generate_all_tables()
+    generate_all_tables()
     # weights_assemble_table('2021-04-24-18:56_get_assemble_TOT_HOSP.txt')
-    custom_mae_table()
+    # custom_mae_table()
+    # generate_all_tables_date('2021-06-02-00:30')
