@@ -16,9 +16,11 @@ import requests
 import json
 from requests.packages.urllib3.util.retry import Retry
 import util
+
 try:
     from toripchanger import TorIpChanger
     from toripchanger.exceptions import TorIpError
+
     TorIpChanger(tor_password='my password', tor_port=9051,
                  local_http_proxy='127.0.0.1:8118', new_ip_max_attempts=30, reuse_threshold=0)
     tor_ip_set = True
@@ -116,10 +118,11 @@ class TorTrendReq(TrendReq):
             s.proxies.update({'https': self.proxies[self.proxy_index]})
         if method == TrendReq.POST_METHOD:
             response = s.post(url, timeout=self.timeout,
-                              cookies=self.cookies, **kwargs, **self.requests_args)  # DO NOT USE retries or backoff_factor here
+                              cookies=self.cookies, **kwargs,
+                              **self.requests_args)  # DO NOT USE retries or backoff_factor here
         else:
             response = s.get(url, timeout=self.timeout, cookies=self.cookies,
-                             **kwargs, **self.requests_args)   # DO NOT USE retries or backoff_factor here
+                             **kwargs, **self.requests_args)  # DO NOT USE retries or backoff_factor here
         # check if the response contains json and throw an exception otherwise
         # Google mostly sends 'application/json' in the Content-Type header,
         # but occasionally it sends 'application/javascript
@@ -152,12 +155,12 @@ class TorTrendReq(TrendReq):
             'https': 'socks5h://localhost:9050',
         }
         return dict(filter(lambda i: i[0] == 'NID', requests.get(
-                    'https://trends.google.com/?geo={geo}'.format(
-                        geo=self.hl[-2:]),
-                    timeout=self.timeout,
-                    proxies=proxies,
-                    **self.requests_args
-                ).cookies.items()))
+            'https://trends.google.com/?geo={geo}'.format(
+                geo=self.hl[-2:]),
+            timeout=self.timeout,
+            proxies=proxies,
+            **self.requests_args
+        ).cookies.items()))
 
 
 class TrendsRequest:  # interface to query google trends data, using a TrendReq instance
@@ -166,7 +169,8 @@ class TrendsRequest:  # interface to query google trends data, using a TrendReq 
         self.request_done = 0
         self.nb_exception = 0
 
-    def get_interest_over_time(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop='') -> Union[None, pd.DataFrame]:
+    def get_interest_over_time(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop='') -> Union[
+        None, pd.DataFrame]:
         raise NotImplementedError
 
     def related_topics(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop='') -> Union[None, Dict[str, str]]:
@@ -222,7 +226,7 @@ class LocalTrendsRequest(TrendsRequest):
                     raise err
 
     def get_interest_over_time(self, kw_list: List[str], cat: int = 0, timeframe: str = 'today 5-y', geo: str = '',
-                      gprop: str = '') -> Union[pd.DataFrame, None]:
+                               gprop: str = '') -> Union[pd.DataFrame, None]:
         """
         get the interest over time value for a list of keywords, on a given loc and time interval. In case of error,
         sleep and return None
@@ -241,7 +245,7 @@ class LocalTrendsRequest(TrendsRequest):
             print(f'query on {self.geo}: {self.kw_list} for {timeframe}... ', end='')
         if self.timeframe not in self.error_interval:
             self.error_interval[self.timeframe] = 0
-        #if self.error_interval[self.timeframe] > 2:
+        # if self.error_interval[self.timeframe] > 2:
         if False:
             if self.verbose:
                 print('ignoring time interval, ', end='')
@@ -315,7 +319,8 @@ class LocalTrendsRequest(TrendsRequest):
         else:
             dic_rising = df[kw_list[0]]['rising'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()[
                 'topic_mid']
-            dic_top = df[kw_list[0]]['top'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()['topic_mid']
+            dic_top = df[kw_list[0]]['top'][['topic_mid', 'topic_title']].set_index('topic_title').to_dict()[
+                'topic_mid']
             values = {**dic_rising, **dic_top}
             values = {k.replace('/', '_'): v for k, v in values.items()}
             return values
@@ -414,7 +419,8 @@ class TorTrendsRequest(LocalTrendsRequest):
                     print('resuming ', end='')
                     # certain probability of changing ip. The ip is not changed at every error caught in order to fool
                     # google trends
-                    if random.randint(self.error_since_ip_change, self.error_since_ip_change + 2) >= self.error_change_ip:
+                    if random.randint(self.error_since_ip_change,
+                                      self.error_since_ip_change + 2) >= self.error_change_ip:
                         self.get_new_ip()
                     return None
             except (Exception) as err:  # error with tor, set a new tor ip changer
@@ -587,7 +593,8 @@ class QueryBatch:
         raise NotImplementedError
 
     def fetch_data(self, timeframe: str) -> pd.DataFrame:  # fetch google trends data
-        df = self.trends_request.get_interest_over_time([self.kw], cat=self.cat, timeframe=timeframe, geo=self.geo, gprop=self.gprop)
+        df = self.trends_request.get_interest_over_time([self.kw], cat=self.cat, timeframe=timeframe, geo=self.geo,
+                                                        gprop=self.gprop)
         return df
 
     def get_df(self) -> pd.DataFrame:  # get the dataframe for this query batch, with a batch_id column
@@ -727,7 +734,7 @@ class DailyGapQuery(DailyQueryBatch):  # daily query batch meant to be used on a
 
     def __init__(self, topic_name: str, topic_code: str, geo: str, trends_request: TrendsRequest, directory: str,
                  begin: Union[datetime, date], end: Union[datetime, date],
-                 batch_id: int, cat: int = 0, number: int = 1, gprop: str = '', shuffle: bool=True,
+                 batch_id: int, cat: int = 0, number: int = 1, gprop: str = '', shuffle: bool = True,
                  savefile: bool = True):
         """
         :param topic_name: name of the topic
@@ -749,7 +756,7 @@ class DailyGapQuery(DailyQueryBatch):  # daily query batch meant to be used on a
         self.savefile = savefile
 
     def __str__(self):
-        return f'{self.directory}/{self.geo}-{self.topic_name}-{self.timeframe}'
+        return f'{self.directory}/{self.geo}-{self.topic_name}-{self.timeframe.replace(" ", "-")}'
 
     def get_df(self) -> pd.DataFrame:  # no batch id is added here
         return self.df
@@ -935,7 +942,8 @@ class Query:
         # max lag used by dates iterator if every date can be queried
         max_lag_left = np.floor(np.sqrt(self.number - 1))  # max left lag
         max_lag_right = np.floor(np.sqrt(self.number - max_lag_left - 1))  # max right lag
-        max_len = self.time_delta(self.query_batch.max_len() - 1 - max_lag_left - max_lag_right)  # max length for a query
+        max_len = self.time_delta(
+            self.query_batch.max_len() - 1 - max_lag_left - max_lag_right)  # max length for a query
         delta = max_len - self.time_delta(self.overlap - 1)
         delta_lag_right = self.time_delta(max_lag_right)
         # max_lag_right == 0 for the latest date, as it is impossible to ask data for a date > latest_day
@@ -991,7 +999,7 @@ class Query:
             # append in middle if needed
             df = df_covered[0]
             df['batch_id'] = batch_id
-            #if self.freq == 'D':
+            # if self.freq == 'D':
             #    df = df.set_index(df.index.date, drop=True)
             valid_df = [df]
             batch_id += 1
@@ -1015,7 +1023,7 @@ class Query:
                 df = df_right
                 # keep the sign in case the batch id was negative
                 df['batch_id'] = np.sign(df.iloc[0]['batch_id']) * batch_id
-                #if self.freq == 'D':
+                # if self.freq == 'D':
                 #    df = df.set_index(df.index.date, drop=True)
                 valid_df.append(df)
                 batch_id += 1
@@ -1277,13 +1285,37 @@ class DailyGapQueryList(QueryList):
                                  existing_files]
                 dates_actualize = []
                 daily_intersection = []
+                if list_df_hourly[0].index.min().to_pydatetime() > self.begin:
+                    # the first batches were invalid
+                    found = False
+                    for daily_df in list_daily_df:
+                        if daily_df.index.min().to_pydatetime() <= self.begin:
+                            daily_intersection.append(daily_df)
+                            found = True
+                            break
+                    if not found:
+                        # no previous daily batch is able to provide data for it
+                        # if reduce(lambda x, y: x and (y.index.min().to_pydatetime() > self.begin), list_daily_df, True):
+                        dates_query = self.begin, min(
+                            (list_df_hourly[0].index.min() + timedelta(days=self.overlap - 1)).to_pydatetime(),
+                            min(DailyQueryBatch.latest_day_available(), list_df_hourly[0].index.max().to_pydatetime()))
+                        dates_actualize.append(dates_query)
+
                 for df_left, df_right in zip(list_df_hourly, list_df_hourly[1:]):
                     df_intersection, can_be_actualized = DailyGapQueryList.find_largest_intersection(df_left, df_right,
-                                                                      list_daily_df, overlap=self.overlap)
+                                                                                                     list_daily_df,
+                                                                                                     overlap=self.overlap)
+                    # print(df_intersection, can_be_actualized)
                     if can_be_actualized:
+                        df_intersection, can_be_actualized = DailyGapQueryList.find_largest_intersection(df_left,
+                                                                                                         df_right,
+                                                                                                         list_daily_df,
+                                                                                                         overlap=self.overlap)
                         dates_query = (df_left.index.max() - timedelta(days=self.overlap - 1)).to_pydatetime(), \
                                       min((df_right.index.min() + timedelta(days=self.overlap - 1)).to_pydatetime(),
                                           DailyQueryBatch.latest_day_available())
+                        dates_query = max(df_left.index.min().to_pydatetime(), dates_query[0]), \
+                                      min(df_right.index.max().to_pydatetime(), dates_query[1])
                         dates_actualize.append(dates_query)
                     else:
                         daily_intersection.append(df_intersection)
@@ -1307,10 +1339,13 @@ class DailyGapQueryList(QueryList):
         """
         remove the old daily gap files that were used before actualizing them
         """
+        '''
         for filename in self.files_remove:
             file = f'{self.directory}/{filename}'
             if os.path.exists(file):
                 os.remove(file)
+        '''
+        pass
 
     @staticmethod
     def find_largest_intersection(df_a: pd.DataFrame, df_b: pd.DataFrame, list_df_daily: List[pd.DataFrame],
@@ -1326,6 +1361,8 @@ class DailyGapQueryList(QueryList):
             return pd.DataFrame(), True
 
         best_inter = -1
+        best_inter_left = -1
+        best_inter_right = -1
         best_df = None
         can_be_actualized = True  # true if the largest date must be actualized
         max_date = DailyQueryBatch.latest_day_available()
@@ -1336,8 +1373,13 @@ class DailyGapQueryList(QueryList):
             intersection_right = len(df_b.index.intersection(df_candidate.index))
             inter = min(intersection_left, intersection_right)
             if inter >= best_inter:
+                if ((intersection_left == best_inter_left and intersection_right < best_inter_right) or
+                        (intersection_right == best_inter_right and intersection_left < best_inter_left)):
+                    continue
                 best_df = df_candidate
                 best_inter = inter
+                best_inter_left = intersection_left
+                best_inter_right = intersection_right
                 if intersection_right < max_overlap_right and df_candidate.index.max() < max_date:  # new data is available
                     can_be_actualized = True
                 elif intersection_left < max_overlap_left:  # better data can be found
@@ -1386,6 +1428,21 @@ class DailyGapQueryList(QueryList):
                     self.child.append(node)
                     node.parent.append(self)
 
+            def return_best_dates(list_node: Dict[int, List[Node]]):
+                dates = []
+                depth_covered = False
+                depth = len(list_node) - 1
+                while depth >= 0 and not depth_covered:
+                    depth_covered = True
+                    for node in list_node[depth]:
+                        if node.feasible and not node.covered:
+                            node.set_covered()
+                            dates.append((node.begin, node.end))
+                        elif not node.covered:
+                            depth_covered = False
+                    depth -= 1
+                return dates
+
             def return_best_date(node: Node):
                 queue = [node]
                 dates = []
@@ -1410,7 +1467,8 @@ class DailyGapQueryList(QueryList):
                     node_a.add_child(node_cur)
                     node_b.add_child(node_cur)
             # retrieve the best interval by starting on the node at the largest depth
-            best_dates = return_best_date(list_node[len(list_dates) - 1][0])
+            # best_dates = return_best_date(list_node[len(list_dates) - 1][0])
+            best_dates = return_best_dates(list_node)
             return best_dates
 
 
@@ -1455,7 +1513,8 @@ class MinimalQueryList(QueryList):
                     df_hourly = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_hourly).set_index(
                         'date')
                     # first hourly date registered + timedelta
-                    begin_hourly = (df_hourly.index.min() - timedelta(days=(self.overlap_hourly_daily-1))).to_pydatetime().date()
+                    begin_hourly = (df_hourly.index.min() - timedelta(
+                        days=(self.overlap_hourly_daily - 1))).to_pydatetime().date()
                     begin_hourly = date_to_datetime(begin_hourly)
                     end = min(self.end, begin_hourly)
                 else:
@@ -1478,11 +1537,12 @@ class MinimalQueryList(QueryList):
                     df_daily = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index(
                         'date')
                     # first hourly date registered + timedelta
-                    end_daily = (df_daily.index.max() - timedelta(days=(self.overlap_hourly_daily-1))).to_pydatetime()
+                    end_daily = (df_daily.index.max() - timedelta(days=(self.overlap_hourly_daily - 1))).to_pydatetime()
                     begin = date_to_datetime(end_daily)
                     yield self.query_hourly(topic_name, topic_code, geo_code, self.trends_request, begin, self.end,
-                                     self.directory_hourly, self.overlap_hourly, self.cat, self.number, self.gprop,
-                                     savefile=self.savefile, shuffle=self.shuffle)
+                                            self.directory_hourly, self.overlap_hourly, self.cat, self.number,
+                                            self.gprop,
+                                            savefile=self.savefile, shuffle=self.shuffle)
                 else:
                     print(f'could not find file {filename}, ignoring hourly requests generation for it')
         self.status = 'done'
@@ -1569,7 +1629,8 @@ class RelevantTopic:
         if self.new_best_topics:
             topic_code = self.new_best_topics[-1]
             # dict of topic_name, topic_code
-            new_related = self.trends_request.related_topics([topic_code], self.cat, self.timeframe, self.geo, self.gprop)
+            new_related = self.trends_request.related_topics([topic_code], self.cat, self.timeframe, self.geo,
+                                                             self.gprop)
             # add only the new topics
             self.new_related_topics.update({k: v for k, v in new_related.items() if k not in self.related_topics})
             # topic saved for further usage
@@ -1586,7 +1647,8 @@ class RelevantTopic:
         data = []
         for topic_name, df in self.new_df.items():
             topic_code = df.columns[0]
-            correlations = [(delay, self.compute_corr(topic_code, delay, self.df_hospi, df)) for delay in range(0, self.max_lag)]
+            correlations = [(delay, self.compute_corr(topic_code, delay, self.df_hospi, df)) for delay in
+                            range(0, self.max_lag)]
             best_delay, best_corr = max(correlations, key=lambda x: abs(x[1]))
             data.append([topic_name, topic_code, best_delay, best_corr])
         new_correlation = pd.DataFrame(data, columns=("Topic_title", "Topic_mid", "Best delay", "Best correlation"))
@@ -1599,15 +1661,19 @@ class RelevantTopic:
     def growth_interest(self):
         for topic_name, topic_code in self.new_related_topics.items():
             self.list_queries_interest.append(DailyQuery(topic_name, topic_code, self.geo, self.trends_request,
-                                                        self.begin, self.end, self.directory, 0, self.cat, 1, self.gprop,
-                                                        savefile=True, shuffle=True))
+                                                         self.begin, self.end, self.directory, 0, self.cat, 1,
+                                                         self.gprop,
+                                                         savefile=True, shuffle=True))
         self.new_related_topics = {}
 
     def save_correlation(self):
-        self.correlation_df.drop_duplicates(subset='Topic_title', keep='first', inplace=True)  # drop duplicates in the dataframe
+        self.correlation_df.drop_duplicates(subset='Topic_title', keep='first',
+                                            inplace=True)  # drop duplicates in the dataframe
         self.correlation_df.reset_index(0, inplace=True, drop=True)  # reset the index --> index = date
-        self.correlation_df = self.correlation_df.sort_values(by='Best correlation', key=lambda col: abs(col), ascending=False)
-        self.correlation_df.to_csv(f'{dir_explore}/{self.geo}-related_topics.csv', index=False)  # write results in a csv file
+        self.correlation_df = self.correlation_df.sort_values(by='Best correlation', key=lambda col: abs(col),
+                                                              ascending=False)
+        self.correlation_df.to_csv(f'{dir_explore}/{self.geo}-related_topics.csv',
+                                   index=False)  # write results in a csv file
 
     def get_correlation(self):
         return self.correlation_df
@@ -1779,8 +1845,15 @@ class HourlyModelData(ModelData):
         for intervals where no data existed
         """
         models = {}
+        exceptions_topic = {topic: [0, 0, []] for topic in self.topics}
         for (dirpath, dirnames, filenames) in os.walk(self.directory_hourly):
             for filename in filenames:
+                topic_code = None
+                topic_name = None
+                begin = None
+                end = None
+                geo = None
+                model = None
                 try:
                     search_obj = re.match('([^_]*)-([^-_]*).csv', filename)
                     if search_obj is None:
@@ -1788,8 +1861,9 @@ class HourlyModelData(ModelData):
                     geo, topic_name = search_obj.group(1), search_obj.group(2)
                     if self.geo and self.topics and ((geo not in self.geo) or (topic_name not in self.topics)):
                         continue
+                    exceptions_topic[topic_name][1] += 1
                     df_hourly = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
-                                         date_parser=date_parser_hourly).set_index('date')
+                                            date_parser=date_parser_hourly).set_index('date')
                     topic_code = df_hourly.columns[-2]
                     list_df_hourly = HourlyModelData.hourly_to_list_daily(df_hourly, topic_code)
                     starting_pattern = f"{geo}-{topic_name}-"
@@ -1799,7 +1873,8 @@ class HourlyModelData(ModelData):
                                                  date_parser=date_parser_daily).set_index('date')[[topic_code]]
                                      for file in existing_files]
 
-                    complete_df = HourlyModelData.merge_hourly_daily(list_df_hourly, list_daily_df, topic_code, drop=True)
+                    complete_df = HourlyModelData.merge_hourly_daily(list_df_hourly, list_daily_df, topic_code,
+                                                                     drop=True)
                     filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
                     if geo in models:
                         models[geo][topic_name] = complete_df
@@ -1808,10 +1883,20 @@ class HourlyModelData(ModelData):
 
                     if savefile:
                         complete_df.to_csv(filename)
-                except (KeyError, AttributeError):
+                except (KeyError, AttributeError, ValueError):
+                    exceptions_topic[topic_name][0] += 1
+                    exceptions_topic[topic_name][2].append(geo)
                     print(f'error when generating model data for {filename}')
-                except ValueError:
-                    print(f'error when generating model data for {filename}')
+
+        for topic_name, (err, tot, loc) in exceptions_topic.items():
+            print(f'topic {topic_name}: {err}/{tot} error', end='s' if err != 0 else '')
+            if err != 0:
+                print(' (', end='')
+                for i, region in enumerate(sorted(loc)):
+                    print(region, end='' if i == err - 1 else ', ')
+                print(')')
+            else:
+                print()
         return models
 
     @staticmethod
@@ -1835,7 +1920,7 @@ class HourlyModelData(ModelData):
             # check for chain of zeros at the beginning and the end
             has_zero = True
             hours_drop = 11  # 5  # consecutive values to check
-            delta = timedelta(hours=hours_drop-1)
+            delta = timedelta(hours=hours_drop - 1)
             while has_zero and new_begin < new_end:  # zeros at the beginning
                 if cur_df[new_begin:new_begin + delta].sum()[0] == 0:
                     new_begin += timedelta(days=1)
@@ -1973,8 +2058,6 @@ class MinimalModelData(ModelData):
                 geo = None
                 model = None
                 try:
-                    if 'COVID-19 testing' in filename:
-                        print('oh')
                     search_obj = re.match('([^_]*)-([^-_]*).csv', filename)
                     if search_obj is None:
                         continue
@@ -1983,13 +2066,13 @@ class MinimalModelData(ModelData):
                         continue
                     exceptions_topic[topic_name][1] += 1
                     daily_df = pd.read_csv(f"{self.directory_daily}/{filename}", parse_dates=['date'],
-                                                 date_parser=date_parser_daily).set_index('date')
+                                           date_parser=date_parser_daily).set_index('date')
                     gb = daily_df.groupby("batch_id")
                     topic_code = daily_df.columns[-2]  # last column is batch_id, the one before is the topic code
                     list_df = [gb.get_group(x)[[topic_code]] for x in gb.groups]
 
                     df_hourly = pd.read_csv(f'{dirpath}/{filename}', parse_dates=['date'],
-                                         date_parser=date_parser_hourly).set_index('date')
+                                            date_parser=date_parser_hourly).set_index('date')
                     begin = daily_df.index.min().to_pydatetime()
                     end = df_hourly.index.max().to_pydatetime()
                     topic_code = df_hourly.columns[-2]
@@ -2006,7 +2089,7 @@ class MinimalModelData(ModelData):
                         exceptions_topic[topic_name][0] += 1
                         exceptions_topic[topic_name][2].append(geo)
                     if savefile:
-                     model.to_csv(filename_model)
+                        model.to_csv(filename_model)
                 except (KeyError, AttributeError, ValueError, IndexError):
                     print(f'error when generating model data from {filename}', end='')
                     if end is not None:
@@ -2030,7 +2113,7 @@ class MinimalModelData(ModelData):
             if err != 0:
                 print(' (', end='')
                 for i, region in enumerate(sorted(loc)):
-                    print(region, end='' if i==err-1 else ', ')
+                    print(region, end='' if i == err - 1 else ', ')
                 print(')')
             else:
                 print()
@@ -2060,7 +2143,7 @@ def run_collect(trends_request, query_list):
     return trends_request
 
 
-def collect_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None, gap: bool = True):
+def collect_data(method: str = 'daily', topics: Dict[str, str] = None, geo: Dict[str, str] = None, gap: bool = True):
     """
     collect the google trends data
     :param daily: whether to collect the data using the daily method or not
@@ -2086,12 +2169,12 @@ def collect_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[s
         end = HourlyQueryBatch.latest_day_available()
         query_list = MinimalQueryList(topics, geo, trends_request, begin, end, savefile=True)
     elif method == 'gap':
-        end = datetime.strptime('2021-05-31T23', hour_format)
-        query_list = DailyGapQueryList(topics, geo, trends_request, begin, end, number=20, savefile=True)
+        end = datetime.strptime('2021-05-31', day_format)
+        query_list = DailyGapQueryList(topics, geo, trends_request, begin, end, number=10, savefile=True, shuffle=False)
     trends_request = run_collect(trends_request, query_list)
 
 
-def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None):
+def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str] = None):
     if topics is None:
         topics = util.list_topics
     if geo is None:
@@ -2104,7 +2187,7 @@ def collect_minimal_data(topics: Dict[str, str] = None, geo: Dict[str, str]=None
     run_collect(trends_request, query_list)
 
 
-def collect_relevant_topics(topics: Dict[str, str] = None, geo: Dict[str, str]=None):
+def collect_relevant_topics(topics: Dict[str, str] = None, geo: Dict[str, str] = None):
     if topics is None:
         topics = util.list_topics
     if geo is None:
@@ -2125,13 +2208,14 @@ def collect_relevant_topics(topics: Dict[str, str] = None, geo: Dict[str, str]=N
     df_hospi = util.hospi_french_region_and_be(url_hospi_france_tot, url_hospi_france_new, url_hospi_belgium,
                                                url_department_france, util.french_region_and_be, new_hosp=True,
                                                tot_hosp=True)['BE']
-    df_hospi = df_hospi.reset_index().rename(columns={'DATE': 'date'}).drop(columns=['LOC']).set_index('date').\
+    df_hospi = df_hospi.reset_index().rename(columns={'DATE': 'date'}).drop(columns=['LOC']).set_index('date'). \
         rolling(7, center=True).mean().dropna()
     queries = RelevantTopic(df_hospi, 25, 0.75, 5, topics, geo, trends_request, begin, end)
     run_collect(trends_request, queries)
 
 
-def generate_model_data(method: str='daily', topics: Dict[str, str] = None, geo: Dict[str, str]=None, savefile=True) -> Dict:
+def generate_model_data(method: str = 'daily', topics: Dict[str, str] = None, geo: Dict[str, str] = None,
+                        savefile=True) -> Dict:
     """
     generate model data
     :param daily: whether to generate the model data using the daily method or not
@@ -2179,20 +2263,6 @@ def nb_request_1_year():
 if __name__ == '__main__':
     topics = util.list_topics_fr_hourly
     geo = {
-        'FR-A': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-B': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-C': "Auvergne-Rhône-Alpes",
-        'FR-P': "Normandie",
-        'FR-D': "Bourgogne-Franche-Comté",
-        'FR-E': 'Bretagne',
-        'FR-F': 'Centre-Val de Loire',
-        'FR-G': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-H': 'Corse',
-        'FR-I': "Bourgogne-Franche-Comté",
-        'FR-Q': "Normandie",
-    }
-    '''
-    {
         'FR-J': 'Ile-de-France',
         'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
         'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
@@ -2206,10 +2276,7 @@ if __name__ == '__main__':
         'FR-V': "Auvergne-Rhône-Alpes",
         'BE': "Belgique",
     }
-    '''
     collect_data('hourly', topics, geo)
-    # generate_model_data('minimal', topics, geo)
+    generate_model_data('hourly', topics, geo)
     # collect_relevant_topics()
     # collect_for_plots()
-
-
