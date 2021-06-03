@@ -1,0 +1,33 @@
+%2021-05-31-15:14_get_assembly_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the European countries, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_walk_assembly}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Horizon &  walk 1 model assembled &  walk 2 model assembled &  walk 3 model assembled &  walk 4 model assembled &  walk 5 model assembled &  walk 6 model assembled &   mean \\
+\midrule
+t+1  & 14.76  & 14.08  & 13.66  & \textbf{8.77}  & 11.18  & 11.19  & 12.27  \\
+t+2  & 24.94  & 21.67  & 23.13  & \textbf{14.50}  & 17.77  & 19.33  & 20.22  \\
+t+3  & 34.61  & 27.65  & 32.83  & \textbf{20.13}  & 23.74  & 26.80  & 27.62  \\
+t+4  & 43.52  & 33.41  & 41.81  & \textbf{25.85}  & 30.58  & 32.48  & 34.61  \\
+t+5  & 52.08  & 39.24  & 50.31  & \textbf{31.41}  & 36.97  & 36.17  & 41.03  \\
+t+6  & 60.22  & 45.20  & 58.20  & \textbf{36.72}  & 43.89  & 39.93  & 47.36  \\
+t+7  & 68.12  & 51.13  & 65.67  & \textbf{41.77}  & 50.73  & 44.44  & 53.64  \\
+t+8  & 73.87  & 55.87  & 72.29  & \textbf{46.53}  & 56.33  & 47.63  & 58.75  \\
+t+9  & 78.67  & 61.54  & 78.51  & \textbf{51.02}  & 61.84  & 51.41  & 63.83  \\
+t+10  & 83.31  & 66.81  & 84.07  & 55.82  & 67.46  & \textbf{54.87}  & 68.72  \\
+t+11  & 87.62  & 72.00  & 89.23  & 60.53  & 72.76  & \textbf{58.47}  & 73.43  \\
+t+12  & 91.50  & 77.23  & 94.00  & 65.12  & 78.07  & \textbf{61.78}  & 77.95  \\
+t+13  & 94.80  & 82.37  & 98.48  & 69.45  & 82.94  & \textbf{64.77}  & 82.13  \\
+t+14  & 97.49  & 87.08  & 102.61  & 74.11  & 87.62  & \textbf{67.98}  & 86.15  \\
+t+15  & 99.75  & 91.72  & 106.67  & 78.89  & 92.33  & \textbf{70.18}  & 89.92  \\
+t+16  & 102.01  & 96.37  & 110.70  & 83.43  & 97.06  & \textbf{72.11}  & 93.61  \\
+t+17  & 105.86  & 100.46  & 114.89  & 87.75  & 101.52  & \textbf{75.26}  & 97.62  \\
+t+18  & 106.57  & 103.47  & 118.97  & 91.69  & 105.69  & \textbf{77.70}  & 100.68  \\
+t+19  & 109.16  & 105.99  & 122.88  & 95.47  & 109.85  & \textbf{79.39}  & 103.79  \\
+t+20  & 111.60  & 107.92  & 126.65  & 98.96  & 113.97  & \textbf{81.10}  & 106.70  \\
+
+\bottomrule
+\end{tabular}
+\end{table}
