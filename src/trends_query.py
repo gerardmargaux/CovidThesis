@@ -1876,6 +1876,11 @@ class HourlyModelData(ModelData):
                     complete_df = HourlyModelData.merge_hourly_daily(list_df_hourly, list_daily_df, topic_code,
                                                                      drop=True)
                     filename = f"{self.directory_model}/{geo}-{topic_name}.csv"
+                    if (complete_df[topic_code] == 0).all() or complete_df.isnull().values.any():
+                        print(f'error when generating model data from {filename}. Generating zero dataframe instead')
+                        exceptions_topic[topic_name][0] += 1
+                        exceptions_topic[topic_name][2].append(geo)
+                        complete_df[topic_code] = 0
                     if geo in models:
                         models[geo][topic_name] = complete_df
                     else:
@@ -1935,6 +1940,7 @@ class HourlyModelData(ModelData):
                     has_zero = False
             # new dates for the dataframe
             cur_df = cur_df[new_begin:new_end]
+            cur_df = cur_df * 100 / cur_df.max()
             # check if the resulting dataframe can be added
             if not cur_df.empty and (new_end - new_begin).days >= 2 and len(np.where(cur_df > 10)[0]) > 3:
                 result.append(cur_df)
@@ -2013,11 +2019,22 @@ class HourlyModelData(ModelData):
         :return df: merged DataFrame
         """
         df = list_df_hourly[0]
+        # attempt to add at the beginning if possible
+        daily_possible = [df_daily for df_daily in list_df_daily if df_daily.index.min() < df.index.min()]
+        if len(daily_possible) != 0:
+            column = df.columns[0]
+            candidate = max(daily_possible, key=lambda df_daily: df_daily.index.intersection(df.index))
+            overlap_len = len(df.index.intersection(candidate.index))
+            if overlap_len != 0:  # possible to add the data since there is an overlap
+                df = ModelData.merge_trends_batches(candidate, df, column, verbose=False, drop='left')
+                df = df * 100 / df.max()
+
         for df_right in list_df_hourly[1:]:
             df_daily, _ = DailyGapQueryList.find_largest_intersection(df, df_right, list_df_daily)
             if df_daily.empty:
                 raise ValueError('no valid dataframe found on the gap')
-            df = HourlyModelData.rescale_batch(df, df_right, df_daily, topic_code, drop=drop)
+            df_1 = HourlyModelData.rescale_batch(df, df_right, df_daily, topic_code, drop=drop)
+            df = df_1
 
         if add_daily_end:  # attempt to add daily data at the end
             daily_possible = [df_daily for df_daily in list_df_daily if df_daily.index.max() > df.index.max()]
@@ -2130,6 +2147,15 @@ def run_collect(trends_request, query_list):
     :return: trends_request instance used at the end of the iterations
     """
     finished = False
+    time_init = time.perf_counter()
+
+    def time_for_change_fun():
+        return random.randint(5000, 5500)
+
+    def time_sleep_change():
+        return random.randint(540, 900)
+
+    time_for_change = time_for_change_fun()
     while not finished:
         try:
             finished = query_list()
@@ -2140,6 +2166,16 @@ def run_collect(trends_request, query_list):
             else:
                 trends_request = LocalTrendsRequest(max_errors=np.inf)
             query_list.set_trends_request(trends_request)
+        time_current = time.perf_counter()
+        elapsed = time_current - time_init
+        if elapsed > time_for_change:
+            time_init = time_current
+            time_for_change = time_for_change_fun()
+            if isinstance(trends_request, TorTrendsRequest):
+                trends_request.pytrends = None
+            time.sleep(time_sleep_change())
+            if isinstance(trends_request, TorTrendsRequest):
+                trends_request.pytrends = trends_request.get_new_ip()
     return trends_request
 
 
@@ -2262,7 +2298,9 @@ def nb_request_1_year():
 
 if __name__ == '__main__':
     topics = util.list_topics_fr_hourly
-    geo = {
+    geo = util.french_region_and_be
+    '''
+        {
         'FR-J': 'Ile-de-France',
         'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
         'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
@@ -2276,7 +2314,9 @@ if __name__ == '__main__':
         'FR-V': "Auvergne-Rhône-Alpes",
         'BE': "Belgique",
     }
-    collect_data('hourly', topics, geo)
-    generate_model_data('hourly', topics, geo)
+    '''
+    #collect_data('hourly', topics, geo)
+    #collect_data('gap', topics, geo)
+    generate_model_data('minimal', topics, geo)
     # collect_relevant_topics()
     # collect_for_plots()
