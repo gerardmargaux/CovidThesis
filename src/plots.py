@@ -197,19 +197,25 @@ def plot_prediction_t_1():  # plot the predictions for t+1
 
 
 # ---------------- plot for the real predictions
-def real_predictions_new(file_pred):
-    file_true = "../res/True_y_values_last_walk_BE.csv"
+def real_predictions_new(file_pred: str, save_path: str):
+    file_true = "../res/True_hosp_values_BE.csv"
     prediction_df = pd.read_csv(file_pred)
     true_df = pd.read_csv(file_true)
 
-    prediction_last_walk = prediction_df[prediction_df["Walk"] == "walk 6"]
-    prediction_last_walk = prediction_last_walk[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+    prediction_last_walk = prediction_df[["DATE", "NEW_HOSP(t+1)"]]
+    prediction_last_walk = prediction_last_walk[prediction_last_walk["DATE"].between("2021-03-01", "2021-03-31", inclusive=True)]
 
-    samples = true_df[:-len(prediction_last_walk)]
-    samples = samples[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+    true_forecast = true_df[true_df["DATE"].between("2021-03-02", "2021-04-01", inclusive=True)]
+    true_forecast = true_forecast[["DATE", "NEW_HOSP"]]
 
-    true_forecast = true_df[-len(prediction_last_walk):]
-    true_forecast = true_forecast[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+    prediction_last_walk["DATE"] = true_forecast["DATE"].values
+    prediction_last_walk = prediction_last_walk.set_index("DATE")
+    true_forecast = true_forecast.set_index("DATE")
+
+    samples = true_df[true_df["DATE"].between("2021-02-01", "2021-03-01", inclusive=True)]
+    samples = samples[["DATE", "NEW_HOSP"]].set_index("DATE")
+
+    print(true_forecast)
 
     # Plot
     fig = plt.figure(figsize=(5, 4))
@@ -220,50 +226,61 @@ def real_predictions_new(file_pred):
     # set locator
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
     # set formatter
-    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     # set font and rotation for date tick labels
     plt.gcf().autofmt_xdate()
     plt_finish()
-    plt.savefig(f'../plot/predictions/prediction_assembler_chap6', dpi=200)
+    plt.savefig(save_path, dpi=200)
 
 
-def real_predictions_tot(file_pred):
-    file_true = "../res/True_tot_hosp_values_last_walk_BE.csv"
+def real_predictions_tot(file_pred: str, save_path: str):
+    file_true = "../res/True_hosp_values_BE.csv"
     prediction_df = pd.read_csv(file_pred)
     true_df = pd.read_csv(file_true)
 
-    prediction_last_walk = prediction_df[prediction_df["Walk"] == "walk 6"]
-    prediction_last_walk = prediction_last_walk[["DATE", "NEW_HOSP(t+1)"]].set_index("DATE")
+    basic_tot = true_df[true_df["DATE"].between("2021-03-01", "2021-03-31", inclusive=True)]
+    basic_tot = basic_tot[["DATE", "TOT_HOSP"]].set_index("DATE")
 
-    basic_tot = true_df[-len(prediction_last_walk)-1:]
-    basic_tot = basic_tot[["DATE", "TOT_HOSP(t+1)"]].set_index("DATE")
+    prediction_last_walk = prediction_df[["DATE", "NEW_HOSP(t+1)", "NEW_HOSP(t+2)", "NEW_HOSP(t+3)", "NEW_HOSP(t+4)", "NEW_HOSP(t+5)", "NEW_HOSP(t+6)", "NEW_HOSP(t+7)", "NEW_HOSP(t+8)", "NEW_HOSP(t+9)", "NEW_HOSP(t+10)"]]
+    prediction_last_walk = prediction_last_walk[
+        prediction_last_walk["DATE"].between("2021-03-01", "2021-03-31", inclusive=True)]
+
+    true_forecast = true_df[true_df["DATE"].between("2021-03-11", "2021-04-10", inclusive=True)]
+    true_forecast = true_forecast[["DATE", "TOT_HOSP"]]
+
+    prediction_last_walk["DATE"] = true_forecast["DATE"].values
+    prediction_last_walk = prediction_last_walk.set_index("DATE")
+    true_forecast = true_forecast.set_index("DATE")
+
     total_pred = []
-    for index, elem in enumerate(prediction_last_walk["NEW_HOSP(t+1)"]):
-        total_pred.append(elem + basic_tot["TOT_HOSP(t+1)"].values[index])
+    for index, elem in enumerate(prediction_last_walk["NEW_HOSP(t+10)"]):
+        final_sum = 0
+        for i in range(1, 10):
+            name = f"NEW_HOSP(t+{i})"
+            final_sum += prediction_last_walk[name].values[index]
+        final_sum += elem + basic_tot["TOT_HOSP"].values[index]
+        total_pred.append(final_sum)
 
-    prediction_last_walk["TOT_HOSP(t+1)"] = total_pred
-    prediction_last_walk = prediction_last_walk.drop(columns=["NEW_HOSP(t+1)"])
+    prediction_last_walk["TOT_HOSP(t+10)"] = total_pred
+    prediction_last_walk = prediction_last_walk.drop(columns=["NEW_HOSP(t+1)", "NEW_HOSP(t+2)", "NEW_HOSP(t+3)", "NEW_HOSP(t+4)", "NEW_HOSP(t+5)", "NEW_HOSP(t+6)", "NEW_HOSP(t+7)", "NEW_HOSP(t+8)", "NEW_HOSP(t+9)", "NEW_HOSP(t+10)"])
 
-    samples = true_df[:-len(prediction_last_walk)]
-    samples = samples[["DATE", "TOT_HOSP(t+1)"]].set_index("DATE")
-
-    true_forecast = true_df[-len(prediction_last_walk):]
-    true_forecast = true_forecast[["DATE", "TOT_HOSP(t+1)"]].set_index("DATE")
+    samples = true_df[true_df["DATE"].between("2021-02-01", "2021-03-10", inclusive=True)]
+    samples = samples[["DATE", "TOT_HOSP"]].set_index("DATE")
 
     # Plot
     fig = plt.figure(figsize=(5, 4))
     plt.plot(samples, linestyle='-', marker='o', color=color_train, label='Value of the last days')
-    plt.plot(true_forecast, linestyle='', marker='o', color=color_actual, label=f'True value t+1')
-    plt.plot(prediction_last_walk, linestyle='', marker='X', color=color_prediction, label=f'Prediction t+1')
+    plt.plot(true_forecast, linestyle='', marker='o', color=color_actual, label=f'True value t+10')
+    plt.plot(prediction_last_walk, linestyle='', marker='X', color=color_prediction, label=f'Prediction t+10')
     ax = fig.axes[0]
     # set locator
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
     # set formatter
-    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     # set font and rotation for date tick labels
     plt.gcf().autofmt_xdate()
     plt_finish()
-    plt.savefig(f'../plot/predictions/prediction_assembler_tot', dpi=200)
+    plt.savefig(save_path, dpi=200)
 
 
 def plot_assembly_real_prediction(name_assembly_file: str, date: str):
@@ -659,4 +676,43 @@ if __name__ == '__main__':
     # plot_adjacent_queries()
     # plot_prediction_t_1()
     # plot_prediction()
-    plot_assembly_real_prediction('2021-06-02-11:26_get_assembly_NEW_HOSP', '2021-04-20')
+    # plot_assembly_real_prediction('2021-06-02-11:26_get_assembly_NEW_HOSP', '2021-04-20')
+
+    dict_models_france = {
+        "../res/2021-06-02-15:49_get_custom_linear_regression_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_linear_reg_chap6', '../plot/predictions/prediction_linear_reg_tot'],
+        "../res/2021-06-02-15:49_get_assembly_2_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_assembler_chap6', '../plot/predictions/prediction_assembler_tot'],
+        "../res/2021-06-02-15:49_get_baseline_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_baseline_chap6', '../plot/predictions/prediction_baseline_tot'],
+        "../res/2021-06-02-15:49_get_dense_model_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_dense_chap6', '../plot/predictions/prediction_dense_tot'],
+        "../res/2021-06-02-15:49_get_encoder_decoder_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_encoder-decoder_chap6',
+            '../plot/predictions/prediction_encoder-decoder_tot'],
+        "../res/2021-06-05-11:27_get_encoder_decoder_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_encoder-decoder_no_trends_chap6',
+            '../plot/predictions/prediction_encoder-decoder_no_trends_tot'],
+    }
+
+    dict_models_europe = {
+        "../res/2021-06-03-00:19_get_custom_linear_regression_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_linear_reg_chap6_europe', '../plot/predictions/prediction_linear_reg_tot_europe'],
+        "../res/2021-06-03-00:19_get_assembly_2_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_assembler_chap6_europe', '../plot/predictions/prediction_assembler_tot_europe'],
+        "../res/2021-06-03-00:19_get_baseline_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_baseline_chap6_europe', '../plot/predictions/prediction_baseline_tot_europe'],
+        "../res/2021-06-03-00:19_get_dense_model_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_dense_chap6_europe', '../plot/predictions/prediction_dense_tot_europe'],
+        "../res/2021-06-03-00:19_get_encoder_decoder_NEW_HOSP_prediction_BE.csv": [
+            '../plot/predictions/prediction_encoder-decoder_europe',
+            '../plot/predictions/prediction_encoder-decoder_tot_europe'],
+        # "../res/2021-06-03-00:19_get_encoder_decoder_NEW_HOSP_prediction_BE.csv": ['../plot/predictions/prediction_encoder-decoder_no_trends_chap6','../plot/predictions/prediction_encoder-decoder_no_trends_tot'],
+    }
+
+    for key, val in dict_models_france.items():
+        real_predictions_new(key, val[0])
+        real_predictions_tot(key, val[1])
+
+    #file_pred = "../res/2021-06-03-00:19_get_assembly_2_NEW_HOSP_prediction_BE.csv"
+    #real_predictions_tot(file_pred)
