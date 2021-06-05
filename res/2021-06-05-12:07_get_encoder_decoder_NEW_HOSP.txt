@@ -1,0 +1,32 @@
+def get_encoder_decoder(batch_input_shape):
+    reg = lambda x: None
+    regw = 0.0005
+    model = Sequential()
+    #model.add(Bidirectional(LSTM(8, return_sequences=True, stateful=False), 
+    #                        input_shape=(n_samples, n_features), merge_mode="ave"))
+    model.add(LSTM(16, return_sequences=True, stateful=False, 
+                   batch_input_shape=batch_input_shape, kernel_regularizer=reg(regw)))
+    model.add(LSTM(4, return_sequences=False, stateful=False, kernel_regularizer=reg(regw)))
+    model.add(RepeatVector(n_forecast))  # repeat
+    model.add(LSTM(4, return_sequences=True, stateful=False, kernel_regularizer=reg(regw)))  # dec
+    if not predict_one:
+        model.add(LSTM(16, return_sequences=True, stateful=False, kernel_regularizer=reg(regw)))  # dec
+        model.add(TimeDistributed(Dense(1, kernel_regularizer=reg(regw), activation='elu')))
+        model.add(Reshape((n_forecast,)))
+    else:
+        model.add(LSTM(16, return_sequences=False, stateful=False, kernel_regularizer=reg(regw)))  # dec
+        model.add(Dense(1, kernel_regularizer=reg(regw), activation='elu'))
+        model.add(Reshape((1,)))
+    model.compile(loss='mse', optimizer='RMSprop', metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    K.set_value(model.optimizer.learning_rate, 0.01)
+    return model
+
+
+epochs = 3000, es_stop_val = False
+
+n_samples = 30, n_forecast = 30
+data = ['NEW_HOSP', 'TOT_HOSP', 'TOT_HOSP_log', 'TOT_HOSP_pct', 'Allergy', 'Coronavirus disease 2019', 'COVID 19 testing', 'COVID 19 vaccine', 'Cure', 'Fièvre', 'Mal de gorge', 'PCR', 'Symptôme', 'Toux', 'Vaccination', 'Virus', 'NEW_Allergy', 'NEW_Coronavirus disease 2019', 'NEW_COVID 19 testing', 'NEW_COVID 19 vaccine', 'NEW_Cure', 'NEW_Fièvre', 'NEW_Mal de gorge', 'NEW_PCR', 'NEW_Symptôme', 'NEW_Toux', 'NEW_Vaccination', 'NEW_Virus']
+target = NEW_HOSP
+scaling = <class 'sklearn.preprocessing._data.MinMaxScaler'>, scaling type = batch
+nb init regions = 23, nb augmented regions = 0
+regions = ['FR-A', 'FR-B', 'FR-C', 'FR-P', 'FR-D', 'FR-E', 'FR-F', 'FR-G', 'FR-H', 'FR-I', 'FR-Q', 'FR-J', 'FR-K', 'FR-L', 'FR-M', 'FR-N', 'FR-O', 'FR-R', 'FR-S', 'FR-T', 'FR-U', 'FR-V', 'BE']

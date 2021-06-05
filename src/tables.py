@@ -333,19 +333,17 @@ def generate_all_tables():
 
 def custom_mae_table():
     list_files = {
-        "2021-05-21-16:25_get_custom_linear_regression_NEW_HOSP.csv": "Linear Regression",
-        "2021-05-21-16:25_get_baseline_NEW_HOSP.csv": "Baseline",
-        "2021-05-21-16:25_get_dense_model_NEW_HOSP.csv": "Dense",
-        "2021-05-25-18:25_get_encoder_decoder_NEW_HOSP.csv": "Encoder trends",
-        "2021-05-25-19:48_get_encoder_decoder_NEW_HOSP.csv": "Encoder no trends",
-        "2021-05-21-17:57_get_assembly_NEW_HOSP.csv": "Assembler",
+        "2021-06-05-11:27_get_encoder_decoder_NEW_HOSP.csv": "H",
+        "2021-06-02-15:49_get_encoder_decoder_NEW_HOSP.csv": "H + Min. T",
+        "2021-06-05-12:40_get_encoder_decoder_NEW_HOSP.csv": "H + Hr. T",
+        "2021-06-05-12:07_get_encoder_decoder_NEW_HOSP.csv": "H + Min. T w/o D.A.",
     }
     my_date = str(datetime.datetime.today()).replace(' ', '-')[:len_dates]
     comparison_table(my_date, "MAE", list_files)
 
 
 if __name__ == '__main__':
-    generate_all_tables()
+    # generate_all_tables()
     # weights_assemble_table('2021-04-24-18:56_get_assemble_TOT_HOSP.txt')
-    # custom_mae_table()
+    custom_mae_table()
     # generate_all_tables_date('2021-06-02-00:30')
