@@ -1,0 +1,15 @@
+def get_baseline(*args, **kwargs):
+    model = MultiStepLastBaseline(*args, **kwargs)
+    model.compile(loss=tf.losses.MeanSquaredError(),
+                      metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    return model
+
+
+epochs = 3000, es_stop_val = False
+
+n_samples = 30, n_forecast = 20
+data = ['TOT_HOSP', 'NEW_HOSP', 'TOT_HOSP_log', 'TOT_HOSP_pct', 'Allergy', 'Coronavirus disease 2019', 'COVID 19 testing', 'COVID 19 vaccine', 'Cure', 'Fièvre', 'Mal de gorge', 'Paracétamol', 'PCR', 'Respiration', 'Symptôme', 'Thermomètre', 'Toux', 'Vaccination', 'Virus']
+target = TOT_HOSP
+scaling = <class 'sklearn.preprocessing._data.MinMaxScaler'>, scaling type = batch
+nb init regions = 23, nb augmented regions = 0
+regions = ['FR-A', 'FR-B', 'FR-C', 'FR-P', 'FR-D', 'FR-E', 'FR-F', 'FR-G', 'FR-H', 'FR-I', 'FR-Q', 'FR-J', 'FR-K', 'FR-L', 'FR-M', 'FR-N', 'FR-O', 'FR-R', 'FR-S', 'FR-T', 'FR-U', 'FR-V', 'BE']

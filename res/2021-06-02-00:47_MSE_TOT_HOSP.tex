@@ -1,0 +1,33 @@
+%2021-06-02-00:47_MSE_TOT_HOSP
+\begin{table}[H]
+\centering
+\caption{MSE when predicting total hospitalizations for the different models, for up to 20 horizons. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MSE_comparison}
+\begin{tabular}{lrrrrr}
+\toprule
+Horizon &  Assembled &    Dense &  Baseline &  Encoder Decoder &  Linear Regression \\
+\midrule
+t+1  & 22514.57  & 865.90  & \textbf{353.04}  & 70223.99  & 6867.53  \\
+t+2  & 25547.64  & \textbf{1237.99}  & 1419.60  & 72693.52  & 9642.14  \\
+t+3  & 29363.85  & \textbf{2741.67}  & 3213.03  & 76404.99  & 13031.61  \\
+t+4  & 32663.55  & \textbf{2305.63}  & 5739.56  & 81300.95  & 17078.41  \\
+t+5  & 35738.45  & \textbf{2619.63}  & 8989.49  & 87280.77  & 21810.90  \\
+t+6  & 37858.51  & \textbf{6367.10}  & 12949.97  & 94743.24  & 27256.05  \\
+t+7  & 39913.91  & \textbf{7628.82}  & 17604.14  & 104207.45  & 33446.15  \\
+t+8  & 43535.60  & \textbf{13964.96}  & 22931.78  & 115602.55  & 40413.46  \\
+t+9  & 46670.81  & \textbf{15765.89}  & 28931.65  & 128496.77  & 48192.42  \\
+t+10  & 50118.68  & \textbf{14032.56}  & 35582.13  & 142296.23  & 56798.60  \\
+t+11  & 55164.84  & \textbf{19513.83}  & 42824.67  & 156685.43  & 66221.81  \\
+t+12  & 60551.79  & \textbf{21316.94}  & 50691.53  & 171797.44  & 76524.66  \\
+t+13  & 65322.21  & \textbf{33277.00}  & 59195.95  & 187899.53  & 87760.24  \\
+t+14  & 71506.10  & \textbf{33992.11}  & 68356.51  & 205068.21  & 99971.62  \\
+t+15  & 78588.25  & \textbf{45308.67}  & 78158.63  & 222837.04  & 113176.01  \\
+t+16  & 86780.32  & \textbf{59113.56}  & 88589.85  & 240485.88  & 127399.40  \\
+t+17  & 95827.46  & \textbf{65346.89}  & 99717.36  & 257369.18  & 142726.45  \\
+t+18  & 105948.71  & \textbf{64317.59}  & 111368.12  & 272840.10  & 159081.33  \\
+t+19  & 117940.94  & \textbf{77283.40}  & 123443.51  & 286557.20  & 176423.82  \\
+t+20  & 130029.81  & \textbf{81515.11}  & 135829.20  & 298347.84  & 194702.48  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

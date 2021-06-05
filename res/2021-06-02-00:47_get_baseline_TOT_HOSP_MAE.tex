@@ -1,0 +1,33 @@
+%2021-06-02-00:47_get_baseline_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_walk_baseline}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  Jan 2021 &  Feb 2021 &  Mar 2021 &  Apr 2021 &  May 2021 &   mean \\
+\midrule
+t+1  & 8.47  & \textbf{7.91}  & 9.98  & 8.30  & 19.29  & 10.79  \\
+t+2  & 16.73  & \textbf{15.63}  & 19.89  & 16.39  & 39.13  & 21.55  \\
+t+3  & 24.95  & \textbf{23.14}  & 29.79  & 24.43  & 59.33  & 32.33  \\
+t+4  & 33.03  & \textbf{30.45}  & 39.83  & 32.34  & 79.74  & 43.08  \\
+t+5  & 41.02  & \textbf{37.59}  & 49.97  & 40.11  & 100.29  & 53.79  \\
+t+6  & 48.87  & \textbf{44.55}  & 60.12  & 47.90  & 120.79  & 64.45  \\
+t+7  & 56.45  & \textbf{51.42}  & 70.21  & 55.80  & 141.28  & 75.03  \\
+t+8  & 63.75  & \textbf{58.05}  & 80.20  & 63.96  & 161.61  & 85.51  \\
+t+9  & 70.65  & \textbf{64.58}  & 90.25  & 72.40  & 181.76  & 95.93  \\
+t+10  & 77.29  & \textbf{70.96}  & 100.38  & 81.06  & 201.67  & 106.27  \\
+t+11  & 83.74  & \textbf{77.29}  & 110.36  & 90.18  & 221.10  & 116.53  \\
+t+12  & 90.11  & \textbf{83.44}  & 120.10  & 99.68  & 240.35  & 126.74  \\
+t+13  & 96.29  & \textbf{89.34}  & 129.65  & 109.60  & 259.55  & 136.89  \\
+t+14  & 102.38  & \textbf{95.05}  & 139.08  & 119.89  & 278.74  & 147.03  \\
+t+15  & 108.33  & \textbf{100.72}  & 148.20  & 130.60  & 297.87  & 157.14  \\
+t+16  & 114.06  & \textbf{106.30}  & 157.03  & 141.64  & 316.91  & 167.19  \\
+t+17  & 119.56  & \textbf{111.82}  & 165.44  & 153.12  & 336.00  & 177.19  \\
+t+18  & 124.83  & \textbf{117.34}  & 173.50  & 165.01  & 354.65  & 187.07  \\
+t+19  & 129.94  & \textbf{122.70}  & 181.23  & 177.18  & 372.53  & 196.72  \\
+t+20  & 134.78  & \textbf{128.00}  & 188.48  & 189.88  & 389.46  & 206.12  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

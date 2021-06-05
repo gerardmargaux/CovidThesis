@@ -1,0 +1,33 @@
+%2021-06-02-00:30_get_dense_model_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_walk_dense_model}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  Jan 2021 &  Feb 2021 &  Mar 2021 &  Apr 2021 &  May 2021 &  mean \\
+\midrule
+t+1  & 2.96  & 2.48  & \textbf{2.41}  & 3.13  & 2.64  & 2.72  \\
+t+2  & 4.19  & 3.74  & \textbf{3.66}  & 4.20  & 5.05  & 4.17  \\
+t+3  & 4.97  & 4.67  & \textbf{4.53}  & 5.84  & 5.65  & 5.13  \\
+t+4  & 6.08  & \textbf{5.51}  & 5.57  & 7.21  & 6.86  & 6.25  \\
+t+5  & 7.19  & 6.75  & \textbf{6.37}  & 8.40  & 8.27  & 7.40  \\
+t+6  & 8.01  & 7.82  & \textbf{7.30}  & 10.17  & 9.61  & 8.58  \\
+t+7  & 9.28  & 8.12  & \textbf{8.08}  & 11.53  & 11.75  & 9.75  \\
+t+8  & 9.44  & 8.83  & \textbf{8.41}  & 12.47  & 11.44  & 10.12  \\
+t+9  & 9.90  & \textbf{8.41}  & 8.72  & 12.43  & 11.93  & 10.28  \\
+t+10  & 10.76  & 9.08  & \textbf{8.89}  & 13.54  & 13.64  & 11.18  \\
+t+11  & 10.66  & \textbf{9.34}  & 9.44  & 15.76  & 13.98  & 11.84  \\
+t+12  & 11.93  & \textbf{9.38}  & 9.62  & 15.38  & 14.80  & 12.22  \\
+t+13  & 12.47  & \textbf{8.87}  & 10.15  & 17.62  & 14.54  & 12.73  \\
+t+14  & 13.06  & \textbf{8.89}  & 10.46  & 17.22  & 15.59  & 13.04  \\
+t+15  & 13.56  & \textbf{9.71}  & 10.92  & 18.09  & 16.22  & 13.70  \\
+t+16  & 14.02  & \textbf{9.79}  & 11.14  & 18.99  & 18.51  & 14.49  \\
+t+17  & 14.49  & \textbf{9.17}  & 11.32  & 21.27  & 18.28  & 14.91  \\
+t+18  & 13.96  & \textbf{9.74}  & 11.57  & 20.46  & 20.39  & 15.22  \\
+t+19  & 14.07  & \textbf{9.73}  & 11.69  & 22.74  & 19.60  & 15.57  \\
+t+20  & 14.94  & \textbf{9.14}  & 11.98  & 23.61  & 20.87  & 16.11  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

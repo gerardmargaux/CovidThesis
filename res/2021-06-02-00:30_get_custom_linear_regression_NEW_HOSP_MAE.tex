@@ -1,0 +1,33 @@
+%2021-06-02-00:30_get_custom_linear_regression_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_walk_custom_linear_regression}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  Jan 2021 &  Feb 2021 &  Mar 2021 &  Apr 2021 &  May 2021 &  mean \\
+\midrule
+t+1  & 6.39  & 7.32  & 5.76  & 6.46  & \textbf{4.66}  & 6.12  \\
+t+2  & 7.21  & 8.34  & 6.60  & 7.32  & \textbf{5.25}  & 6.94  \\
+t+3  & 7.96  & 9.33  & 7.35  & 8.15  & \textbf{5.68}  & 7.69  \\
+t+4  & 8.66  & 10.24  & 8.01  & 9.05  & \textbf{6.02}  & 8.40  \\
+t+5  & 9.28  & 11.09  & 8.54  & 9.93  & \textbf{6.44}  & 9.06  \\
+t+6  & 9.87  & 11.88  & 9.06  & 10.78  & \textbf{6.91}  & 9.70  \\
+t+7  & 10.42  & 12.62  & 9.52  & 11.56  & \textbf{7.28}  & 10.28  \\
+t+8  & 10.95  & 13.28  & 9.90  & 12.28  & \textbf{7.70}  & 10.82  \\
+t+9  & 11.52  & 13.93  & 10.25  & 13.04  & \textbf{8.26}  & 11.40  \\
+t+10  & 12.17  & 14.58  & 10.56  & 13.83  & \textbf{9.07}  & 12.04  \\
+t+11  & 12.78  & 15.18  & 10.99  & 14.51  & \textbf{10.21}  & 12.73  \\
+t+12  & 13.45  & 15.81  & 11.56  & 15.12  & \textbf{11.32}  & 13.45  \\
+t+13  & 14.12  & 16.35  & \textbf{12.20}  & 15.87  & 12.33  & 14.17  \\
+t+14  & 14.74  & 16.79  & \textbf{12.93}  & 16.65  & 13.28  & 14.88  \\
+t+15  & 15.34  & 17.18  & \textbf{13.76}  & 17.43  & 14.25  & 15.59  \\
+t+16  & 15.89  & 17.65  & \textbf{14.47}  & 18.23  & 15.23  & 16.29  \\
+t+17  & 16.37  & 18.20  & \textbf{15.17}  & 19.02  & 16.01  & 16.96  \\
+t+18  & 16.84  & 18.80  & \textbf{15.88}  & 19.89  & 16.57  & 17.59  \\
+t+19  & 17.32  & 19.44  & \textbf{16.45}  & 20.82  & 17.47  & 18.30  \\
+t+20  & 17.71  & 20.18  & \textbf{17.10}  & 21.73  & 18.67  & 19.08  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

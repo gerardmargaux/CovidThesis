@@ -1,0 +1,33 @@
+%2021-06-02-00:47_get_dense_model_TOT_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting total hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_walk_dense_model}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  Jan 2021 &  Feb 2021 &  Mar 2021 &  Apr 2021 &  May 2021 &   mean \\
+\midrule
+t+1  & 21.89  & 19.99  & 23.14  & 19.22  & \textbf{11.65}  & 19.18  \\
+t+2  & 29.83  & 23.73  & 17.89  & 24.37  & \textbf{13.23}  & 21.81  \\
+t+3  & 35.79  & 24.31  & \textbf{22.29}  & 29.41  & 49.26  & 32.21  \\
+t+4  & \textbf{27.25}  & 28.91  & 28.30  & 33.95  & 30.88  & 29.86  \\
+t+5  & 33.58  & 33.59  & \textbf{29.73}  & 34.74  & 35.44  & 33.42  \\
+t+6  & 57.89  & \textbf{43.04}  & 56.27  & 44.14  & 49.20  & 50.11  \\
+t+7  & 65.48  & 46.21  & 68.94  & \textbf{41.38}  & 55.96  & 55.60  \\
+t+8  & 76.77  & 50.25  & 75.14  & \textbf{48.85}  & 107.19  & 71.64  \\
+t+9  & 67.59  & \textbf{50.67}  & 62.40  & 64.79  & 116.22  & 72.33  \\
+t+10  & 76.52  & \textbf{54.53}  & 74.68  & 69.44  & 80.60  & 71.15  \\
+t+11  & 83.45  & 66.54  & 108.06  & \textbf{66.27}  & 102.69  & 85.40  \\
+t+12  & 95.33  & \textbf{66.47}  & 90.94  & 72.80  & 112.93  & 87.69  \\
+t+13  & 105.82  & \textbf{68.43}  & 101.25  & 93.88  & 160.50  & 105.98  \\
+t+14  & 112.73  & \textbf{81.93}  & 141.31  & 89.71  & 135.61  & 112.26  \\
+t+15  & 143.61  & \textbf{79.65}  & 125.37  & 96.36  & 186.92  & 126.38  \\
+t+16  & 157.90  & \textbf{84.89}  & 164.42  & 121.43  & 197.71  & 145.27  \\
+t+17  & 143.46  & \textbf{99.61}  & 175.00  & 131.05  & 210.68  & 151.96  \\
+t+18  & 170.99  & \textbf{95.99}  & 186.48  & 123.61  & 192.02  & 153.82  \\
+t+19  & 182.66  & \textbf{100.62}  & 197.14  & 148.89  & 208.76  & 167.61  \\
+t+20  & 189.14  & \textbf{106.10}  & 206.42  & 141.10  & 219.99  & 172.55  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

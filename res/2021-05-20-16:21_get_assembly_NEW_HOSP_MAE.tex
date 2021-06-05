@@ -1,32 +1,32 @@
 %2021-05-20-16:21_get_assembly_NEW_HOSP_MAE
 \begin{table}[H]
 \centering
-\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
 \label{tab:MAE_walk_assembly}
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{lrrrrrrr}
 \toprule
-Horizon &  walk 1 model assembled &  walk 2 model assembled &  walk 3 model assembled &  walk 4 model assembled &  walk 5 model assembled &  walk 6 model assembled \\
+Horizon &  walk 1 model assembled &  walk 2 model assembled &  walk 3 model assembled &  walk 4 model assembled &  walk 5 model assembled &  walk 6 model assembled &   NaN \\
 \midrule
-t+1  & 4.15  & 3.50  & 3.69  & \textbf{3.09}  & 3.39  & 3.61  \\
-t+2  & 7.16  & 6.29  & 5.91  & \textbf{5.04}  & 5.81  & 6.14  \\
-t+3  & 10.03  & 8.88  & 8.21  & \textbf{7.26}  & 8.12  & 8.38  \\
-t+4  & 12.90  & 11.55  & 10.37  & \textbf{9.01}  & 10.30  & 10.52  \\
-t+5  & 15.82  & 13.81  & 12.59  & \textbf{11.20}  & 12.37  & 12.71  \\
-t+6  & 18.58  & 16.11  & 14.63  & \textbf{13.10}  & 14.62  & 14.88  \\
-t+7  & 22.76  & 19.35  & 17.84  & \textbf{16.07}  & 18.14  & 18.27  \\
-t+8  & 25.60  & 21.69  & 19.75  & \textbf{18.02}  & 20.15  & 20.25  \\
-t+9  & 28.45  & 23.90  & 21.99  & \textbf{19.71}  & 21.91  & 22.22  \\
-t+10  & 31.24  & 26.07  & 23.95  & \textbf{21.60}  & 23.84  & 24.11  \\
-t+11  & 34.09  & 27.93  & 26.10  & \textbf{23.52}  & 25.87  & 26.20  \\
-t+12  & 37.07  & 30.18  & 28.15  & \textbf{25.43}  & 27.94  & 28.40  \\
-t+13  & 40.07  & 32.39  & 30.34  & \textbf{27.33}  & 29.96  & 30.50  \\
-t+14  & 43.05  & 34.72  & 32.57  & \textbf{29.17}  & 31.71  & 32.54  \\
-t+15  & 46.46  & 36.79  & 34.69  & \textbf{30.89}  & 33.90  & 34.86  \\
-t+16  & 49.92  & 38.93  & 36.94  & \textbf{32.74}  & 36.26  & 37.01  \\
-t+17  & 53.22  & 40.93  & 39.21  & \textbf{34.40}  & 38.57  & 39.23  \\
-t+18  & 56.42  & 43.31  & 41.44  & \textbf{36.40}  & 40.46  & 41.60  \\
-t+19  & 59.84  & 45.74  & 43.57  & \textbf{38.37}  & 42.37  & 43.92  \\
-t+20  & 63.14  & 47.81  & 45.73  & \textbf{40.36}  & 44.52  & 46.12  \\
+t+1  & 4.15  & 3.50  & 3.69  & \textbf{3.09}  & 3.39  & 3.61  & 3.57  \\
+t+2  & 7.16  & 6.29  & 5.91  & \textbf{5.04}  & 5.81  & 6.14  & 6.06  \\
+t+3  & 10.03  & 8.88  & 8.21  & \textbf{7.26}  & 8.12  & 8.38  & 8.48  \\
+t+4  & 12.90  & 11.55  & 10.37  & \textbf{9.01}  & 10.30  & 10.52  & 10.77  \\
+t+5  & 15.82  & 13.81  & 12.59  & \textbf{11.20}  & 12.37  & 12.71  & 13.08  \\
+t+6  & 18.58  & 16.11  & 14.63  & \textbf{13.10}  & 14.62  & 14.88  & 15.32  \\
+t+7  & 22.76  & 19.35  & 17.84  & \textbf{16.07}  & 18.14  & 18.27  & 18.74  \\
+t+8  & 25.60  & 21.69  & 19.75  & \textbf{18.02}  & 20.15  & 20.25  & 20.91  \\
+t+9  & 28.45  & 23.90  & 21.99  & \textbf{19.71}  & 21.91  & 22.22  & 23.03  \\
+t+10  & 31.24  & 26.07  & 23.95  & \textbf{21.60}  & 23.84  & 24.11  & 25.13  \\
+t+11  & 34.09  & 27.93  & 26.10  & \textbf{23.52}  & 25.87  & 26.20  & 27.28  \\
+t+12  & 37.07  & 30.18  & 28.15  & \textbf{25.43}  & 27.94  & 28.40  & 29.53  \\
+t+13  & 40.07  & 32.39  & 30.34  & \textbf{27.33}  & 29.96  & 30.50  & 31.77  \\
+t+14  & 43.05  & 34.72  & 32.57  & \textbf{29.17}  & 31.71  & 32.54  & 33.96  \\
+t+15  & 46.46  & 36.79  & 34.69  & \textbf{30.89}  & 33.90  & 34.86  & 36.26  \\
+t+16  & 49.92  & 38.93  & 36.94  & \textbf{32.74}  & 36.26  & 37.01  & 38.63  \\
+t+17  & 53.22  & 40.93  & 39.21  & \textbf{34.40}  & 38.57  & 39.23  & 40.93  \\
+t+18  & 56.42  & 43.31  & 41.44  & \textbf{36.40}  & 40.46  & 41.60  & 43.27  \\
+t+19  & 59.84  & 45.74  & 43.57  & \textbf{38.37}  & 42.37  & 43.92  & 45.63  \\
+t+20  & 63.14  & 47.81  & 45.73  & \textbf{40.36}  & 44.52  & 46.12  & 47.95  \\
 
 \bottomrule
 \end{tabular}

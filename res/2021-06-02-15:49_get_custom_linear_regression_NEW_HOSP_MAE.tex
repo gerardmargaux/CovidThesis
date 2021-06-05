@@ -1,0 +1,43 @@
+%2021-06-02-15:49_get_custom_linear_regression_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 30 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\label{tab:MAE_walk_custom_linear_regression}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  Jan 2021 &  Feb 2021 &  Mar 2021 &  Apr 2021 &  May 2021 &  mean \\
+\midrule
+t+1  & 6.39  & 7.32  & 5.76  & 6.46  & \textbf{4.88}  & 6.16  \\
+t+2  & 7.21  & 8.34  & 6.60  & 7.32  & \textbf{6.03}  & 7.10  \\
+t+3  & 7.96  & 9.33  & 7.35  & 8.15  & \textbf{6.40}  & 7.84  \\
+t+4  & 8.66  & 10.24  & 8.01  & 9.05  & \textbf{6.38}  & 8.47  \\
+t+5  & 9.28  & 11.09  & 8.54  & 9.93  & \textbf{6.71}  & 9.11  \\
+t+6  & 9.87  & 11.88  & 9.06  & 10.78  & \textbf{7.01}  & 9.72  \\
+t+7  & 10.42  & 12.62  & 9.52  & 11.56  & \textbf{7.16}  & 10.26  \\
+t+8  & 10.95  & 13.28  & 9.90  & 12.28  & \textbf{6.86}  & 10.65  \\
+t+9  & 11.52  & 13.93  & 10.25  & 13.04  & \textbf{6.57}  & 11.06  \\
+t+10  & 12.17  & 14.58  & 10.56  & 13.83  & \textbf{6.74}  & 11.58  \\
+t+11  & 12.78  & 15.18  & 10.99  & 14.51  & \textbf{7.67}  & 12.22  \\
+t+12  & 13.45  & 15.81  & 11.56  & 15.12  & \textbf{8.76}  & 12.94  \\
+t+13  & 14.12  & 16.35  & 12.20  & 15.87  & \textbf{9.21}  & 13.55  \\
+t+14  & 14.74  & 16.79  & 12.93  & 16.65  & \textbf{9.73}  & 14.17  \\
+t+15  & 15.34  & 17.18  & 13.76  & 17.43  & \textbf{10.72}  & 14.89  \\
+t+16  & 15.89  & 17.65  & 14.47  & 18.23  & \textbf{12.00}  & 15.65  \\
+t+17  & 16.37  & 18.20  & 15.17  & 19.02  & \textbf{12.46}  & 16.24  \\
+t+18  & 16.84  & 18.80  & 15.88  & 19.89  & \textbf{12.88}  & 16.85  \\
+t+19  & 17.32  & 19.44  & 16.45  & 20.82  & \textbf{13.52}  & 17.51  \\
+t+20  & 17.71  & 20.18  & 17.10  & 21.73  & \textbf{14.67}  & 18.28  \\
+t+21  & 17.98  & 20.98  & 17.76  & 22.67  & \textbf{17.07}  & 19.29  \\
+t+22  & \textbf{18.28}  & 21.88  & 18.38  & 23.65  & 18.45  & 20.13  \\
+t+23  & 18.69  & 22.77  & 19.06  & 24.70  & \textbf{18.52}  & 20.75  \\
+t+24  & 19.08  & 23.69  & 19.77  & 25.65  & \textbf{18.61}  & 21.36  \\
+t+25  & 19.45  & 24.58  & 20.61  & 26.58  & \textbf{19.10}  & 22.06  \\
+t+26  & \textbf{19.80}  & 25.45  & 21.44  & 27.48  & 20.23  & 22.88  \\
+t+27  & \textbf{20.19}  & 26.27  & 22.24  & 28.40  & 20.55  & 23.53  \\
+t+28  & 20.51  & 27.06  & 23.09  & 29.27  & \textbf{20.10}  & 24.01  \\
+t+29  & \textbf{20.92}  & 27.84  & 23.96  & 30.08  & 21.83  & 24.93  \\
+t+30  & \textbf{21.34}  & 28.62  & 24.82  & 30.83  & 25.60  & 26.24  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

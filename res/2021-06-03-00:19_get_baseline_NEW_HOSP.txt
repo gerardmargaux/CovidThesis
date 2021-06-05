@@ -1,0 +1,15 @@
+def get_baseline(*args, **kwargs):
+    model = MultiStepLastBaseline(*args, **kwargs)
+    model.compile(loss=tf.losses.MeanSquaredError(),
+                      metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    return model
+
+
+epochs = 3000, es_stop_val = False
+
+n_samples = 30, n_forecast = 30
+data = ['NEW_HOSP', 'TOT_HOSP', 'TOT_HOSP_log', 'TOT_HOSP_pct', 'Agueusie', 'Allergy', 'Anosmie', 'Coronavirus disease 2019', 'COVID 19 testing', 'COVID 19 vaccine', 'Cure', 'Dyspnée', 'Fièvre', 'Grippe espagnole', 'Mal de gorge', 'Paracétamol', 'PCR', 'Respiration', 'Respiratory syncytial virus', 'Severe acute respiratory syndrome coronavirus 2', 'Symptôme', 'Thermomètre', 'Toux', 'Vaccination', 'Virus', 'Épidémie', 'NEW_Agueusie', 'NEW_Allergy', 'NEW_Anosmie', 'NEW_Coronavirus disease 2019', 'NEW_COVID 19 testing', 'NEW_COVID 19 vaccine', 'NEW_Cure', 'NEW_Dyspnée', 'NEW_Fièvre', 'NEW_Grippe espagnole', 'NEW_Mal de gorge', 'NEW_Paracétamol', 'NEW_PCR', 'NEW_Respiration', 'NEW_Respiratory syncytial virus', 'NEW_Severe acute respiratory syndrome coronavirus 2', 'NEW_Symptôme', 'NEW_Thermomètre', 'NEW_Toux', 'NEW_Vaccination', 'NEW_Virus', 'NEW_Épidémie']
+target = NEW_HOSP
+scaling = <class 'sklearn.preprocessing._data.MinMaxScaler'>, scaling type = batch
+nb init regions = 23, nb augmented regions = 0
+regions = ['AT', 'BE', 'BG', 'CZ', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'HR', 'HU', 'IE', 'IT', 'LT', 'LV', 'NL', 'NO', 'PL', 'PT', 'SE', 'SI', 'SK']

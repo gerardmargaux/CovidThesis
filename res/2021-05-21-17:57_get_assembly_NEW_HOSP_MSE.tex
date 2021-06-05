@@ -1,32 +1,32 @@
 %2021-05-21-17:57_get_assembly_NEW_HOSP_MSE
 \begin{table}[H]
 \centering
-\caption{MSE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
+\caption{MSE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 156 augmented regions }
 \label{tab:MSE_walk_assembly}
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{lrrrrrrr}
 \toprule
-Horizon &  walk 1 model assembled &  walk 2 model assembled &  walk 3 model assembled &  walk 4 model assembled &  walk 5 model assembled &  walk 6 model assembled \\
+Horizon &  walk 1 model assembled &  walk 2 model assembled &  walk 3 model assembled &  walk 4 model assembled &  walk 5 model assembled &  walk 6 model assembled &     NaN \\
 \midrule
-t+1  & 47.35  & 27.71  & 36.72  & \textbf{17.94}  & 23.17  & 29.80  \\
-t+2  & 132.08  & 84.52  & 104.64  & \textbf{38.93}  & 73.32  & 89.19  \\
-t+3  & 263.58  & 166.91  & 227.17  & \textbf{79.94}  & 134.49  & 164.27  \\
-t+4  & 475.36  & 266.86  & 397.63  & \textbf{117.54}  & 208.58  & 268.06  \\
-t+5  & 746.47  & 375.61  & 627.48  & \textbf{183.53}  & 283.54  & 381.81  \\
-t+6  & 1039.63  & 495.19  & 892.05  & \textbf{243.39}  & 386.13  & 496.32  \\
-t+7  & 1543.93  & 736.20  & 1341.92  & \textbf{369.01}  & 591.60  & 713.12  \\
-t+8  & 1992.36  & 932.46  & 1709.48  & \textbf{460.00}  & 717.32  & 846.16  \\
-t+9  & 2535.75  & 1154.96  & 2239.07  & \textbf{562.89}  & 849.27  & 989.17  \\
-t+10  & 3089.06  & 1381.84  & 2700.27  & \textbf{651.20}  & 974.70  & 1140.18  \\
-t+11  & 3726.78  & 1591.74  & 3331.50  & \textbf{754.22}  & 1153.96  & 1318.78  \\
-t+12  & 4463.66  & 1874.42  & 3948.73  & \textbf{874.46}  & 1345.37  & 1528.34  \\
-t+13  & 5248.63  & 2189.68  & 4545.37  & \textbf{988.28}  & 1538.05  & 1708.58  \\
-t+14  & 6136.59  & 2545.37  & 5214.47  & \textbf{1115.86}  & 1718.56  & 1963.05  \\
-t+15  & 7230.81  & 2871.00  & 5874.74  & \textbf{1242.59}  & 1942.18  & 2236.31  \\
-t+16  & 8347.73  & 3198.45  & 6722.67  & \textbf{1363.24}  & 2217.72  & 2532.20  \\
-t+17  & 9492.12  & 3540.78  & 7455.77  & \textbf{1503.41}  & 2506.95  & 2847.95  \\
-t+18  & 10683.02  & 3963.14  & 8185.94  & \textbf{1665.34}  & 2775.64  & 3201.29  \\
-t+19  & 12036.57  & 4430.84  & 9046.82  & \textbf{1853.40}  & 3046.60  & 3543.78  \\
-t+20  & 13389.48  & 4871.92  & 9705.39  & \textbf{2016.90}  & 3391.47  & 3943.98  \\
+t+1  & 47.35  & 27.71  & 36.72  & \textbf{17.94}  & 23.17  & 29.80  & 30.45  \\
+t+2  & 132.08  & 84.52  & 104.64  & \textbf{38.93}  & 73.32  & 89.19  & 87.11  \\
+t+3  & 263.58  & 166.91  & 227.17  & \textbf{79.94}  & 134.49  & 164.27  & 172.73  \\
+t+4  & 475.36  & 266.86  & 397.63  & \textbf{117.54}  & 208.58  & 268.06  & 289.00  \\
+t+5  & 746.47  & 375.61  & 627.48  & \textbf{183.53}  & 283.54  & 381.81  & 433.07  \\
+t+6  & 1039.63  & 495.19  & 892.05  & \textbf{243.39}  & 386.13  & 496.32  & 592.12  \\
+t+7  & 1543.93  & 736.20  & 1341.92  & \textbf{369.01}  & 591.60  & 713.12  & 882.63  \\
+t+8  & 1992.36  & 932.46  & 1709.48  & \textbf{460.00}  & 717.32  & 846.16  & 1109.63  \\
+t+9  & 2535.75  & 1154.96  & 2239.07  & \textbf{562.89}  & 849.27  & 989.17  & 1388.52  \\
+t+10  & 3089.06  & 1381.84  & 2700.27  & \textbf{651.20}  & 974.70  & 1140.18  & 1656.21  \\
+t+11  & 3726.78  & 1591.74  & 3331.50  & \textbf{754.22}  & 1153.96  & 1318.78  & 1979.50  \\
+t+12  & 4463.66  & 1874.42  & 3948.73  & \textbf{874.46}  & 1345.37  & 1528.34  & 2339.16  \\
+t+13  & 5248.63  & 2189.68  & 4545.37  & \textbf{988.28}  & 1538.05  & 1708.58  & 2703.10  \\
+t+14  & 6136.59  & 2545.37  & 5214.47  & \textbf{1115.86}  & 1718.56  & 1963.05  & 3115.65  \\
+t+15  & 7230.81  & 2871.00  & 5874.74  & \textbf{1242.59}  & 1942.18  & 2236.31  & 3566.27  \\
+t+16  & 8347.73  & 3198.45  & 6722.67  & \textbf{1363.24}  & 2217.72  & 2532.20  & 4063.67  \\
+t+17  & 9492.12  & 3540.78  & 7455.77  & \textbf{1503.41}  & 2506.95  & 2847.95  & 4557.83  \\
+t+18  & 10683.02  & 3963.14  & 8185.94  & \textbf{1665.34}  & 2775.64  & 3201.29  & 5079.06  \\
+t+19  & 12036.57  & 4430.84  & 9046.82  & \textbf{1853.40}  & 3046.60  & 3543.78  & 5659.67  \\
+t+20  & 13389.48  & 4871.92  & 9705.39  & \textbf{2016.90}  & 3391.47  & 3943.98  & 6219.86  \\
 
 \bottomrule
 \end{tabular}

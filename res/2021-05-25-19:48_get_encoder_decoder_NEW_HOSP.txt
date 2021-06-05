@@ -1,0 +1,32 @@
+def get_encoder_decoder(batch_input_shape):
+    reg = lambda x: None
+    regw = 0.0005
+    model = Sequential()
+    #model.add(Bidirectional(LSTM(8, return_sequences=True, stateful=False), 
+    #                        input_shape=(n_samples, n_features), merge_mode="ave"))
+    model.add(LSTM(16, return_sequences=True, stateful=False, 
+                   batch_input_shape=batch_input_shape, kernel_regularizer=reg(regw)))
+    model.add(LSTM(4, return_sequences=False, stateful=False, kernel_regularizer=reg(regw)))
+    model.add(RepeatVector(n_forecast))  # repeat
+    model.add(LSTM(4, return_sequences=True, stateful=False, kernel_regularizer=reg(regw)))  # dec
+    if not predict_one:
+        model.add(LSTM(16, return_sequences=True, stateful=False, kernel_regularizer=reg(regw)))  # dec
+        model.add(TimeDistributed(Dense(1, kernel_regularizer=reg(regw), activation='elu')))
+        model.add(Reshape((n_forecast,)))
+    else:
+        model.add(LSTM(16, return_sequences=False, stateful=False, kernel_regularizer=reg(regw)))  # dec
+        model.add(Dense(1, kernel_regularizer=reg(regw), activation='elu'))
+        model.add(Reshape((1,)))
+    model.compile(loss='mse', optimizer='RMSprop', metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    K.set_value(model.optimizer.learning_rate, 0.01)
+    return model
+
+
+epochs = 5000, es_stop_val = False
+
+n_samples = 30, n_forecast = 20
+data = ['NEW_HOSP', 'TOT_HOSP', 'TOT_HOSP_log', 'TOT_HOSP_pct']
+target = NEW_HOSP
+scaling = <class 'sklearn.preprocessing._data.MinMaxScaler'>, scaling type = batch
+nb init regions = 23, nb augmented regions = 156
+regions = ['FR-A', 'FR-B', 'FR-C', 'FR-P', 'FR-D', 'FR-E', 'FR-F', 'FR-G', 'FR-H', 'FR-I', 'FR-Q', 'FR-J', 'FR-K', 'FR-L', 'FR-M', 'FR-N', 'FR-O', 'FR-R', 'FR-S', 'FR-T', 'FR-U', 'FR-V', 'BE', 'FR-A-FR-I', 'FR-A-FR-M', 'FR-B-FR-L', 'FR-B-FR-N', 'FR-B-FR-T', 'FR-C-FR-D', 'FR-C-FR-F', 'FR-C-FR-K', 'FR-C-FR-L', 'FR-C-FR-N', 'FR-C-FR-V', 'FR-E-FR-P', 'FR-F-FR-P', 'FR-P-FR-Q', 'FR-P-FR-R', 'FR-D-FR-F', 'FR-D-FR-G', 'FR-D-FR-I', 'FR-D-FR-J', 'FR-D-FR-V', 'FR-E-FR-R', 'FR-F-FR-Q', 'FR-F-FR-J', 'FR-F-FR-L', 'FR-F-FR-R', 'FR-F-FR-T', 'FR-G-FR-I', 'FR-G-FR-J', 'FR-G-FR-M', 'FR-G-FR-S', 'FR-I-FR-M', 'FR-I-FR-V', 'FR-J-FR-Q', 'FR-Q-FR-S', 'FR-J-FR-S', 'FR-K-FR-N', 'FR-K-FR-U', 'FR-K-FR-V', 'FR-L-FR-N', 'FR-L-FR-T', 'FR-O-FR-S', 'FR-R-FR-T', 'FR-U-FR-V', 'FR-A-FR-D-FR-I', 'FR-A-FR-G-FR-I', 'FR-A-FR-G-FR-M', 'FR-A-FR-I-FR-M', 'FR-A-FR-I-FR-V', 'FR-B-FR-C-FR-L', 'FR-B-FR-C-FR-N', 'FR-B-FR-F-FR-L', 'FR-B-FR-F-FR-T', 'FR-B-FR-K-FR-N', 'FR-B-FR-L-FR-N', 'FR-B-FR-L-FR-T', 'FR-B-FR-N-FR-T', 'FR-B-FR-R-FR-T', 'FR-C-FR-F-FR-P', 'FR-C-FR-D-FR-F', 'FR-C-FR-D-FR-G', 'FR-C-FR-D-FR-I', 'FR-C-FR-D-FR-J', 'FR-C-FR-D-FR-K', 'FR-C-FR-D-FR-L', 'FR-C-FR-D-FR-N', 'FR-C-FR-D-FR-V', 'FR-C-FR-F-FR-Q', 'FR-C-FR-F-FR-J', 'FR-C-FR-F-FR-K', 'FR-C-FR-F-FR-L', 'FR-C-FR-F-FR-N', 'FR-C-FR-F-FR-R', 'FR-C-FR-F-FR-T', 'FR-C-FR-F-FR-V', 'FR-C-FR-I-FR-V', 'FR-C-FR-K-FR-L', 'FR-C-FR-K-FR-N', 'FR-C-FR-K-FR-U', 'FR-C-FR-K-FR-V', 'FR-C-FR-L-FR-N', 'FR-C-FR-L-FR-T', 'FR-C-FR-L-FR-V', 'FR-C-FR-N-FR-V', 'FR-C-FR-U-FR-V', 'FR-D-FR-F-FR-P', 'FR-E-FR-F-FR-P', 'FR-E-FR-P-FR-Q', 'FR-E-FR-P-FR-R', 'FR-F-FR-P-FR-Q', 'FR-F-FR-J-FR-P', 'FR-F-FR-L-FR-P', 'FR-F-FR-P-FR-R', 'FR-F-FR-P-FR-T', 'FR-J-FR-P-FR-Q', 'FR-P-FR-Q-FR-R', 'FR-P-FR-Q-FR-S', 'FR-P-FR-R-FR-T', 'FR-D-FR-F-FR-G', 'FR-D-FR-F-FR-I', 'FR-D-FR-F-FR-Q', 'FR-D-FR-F-FR-J', 'FR-D-FR-F-FR-L', 'FR-D-FR-F-FR-R', 'FR-D-FR-F-FR-T', 'FR-D-FR-F-FR-V', 'FR-D-FR-G-FR-I', 'FR-D-FR-G-FR-J', 'FR-D-FR-G-FR-M', 'FR-D-FR-G-FR-S', 'FR-D-FR-G-FR-V', 'FR-D-FR-I-FR-J', 'FR-D-FR-I-FR-M', 'FR-D-FR-I-FR-V', 'FR-D-FR-J-FR-Q', 'FR-D-FR-J-FR-S', 'FR-D-FR-J-FR-V', 'FR-D-FR-K-FR-V', 'FR-D-FR-U-FR-V', 'FR-E-FR-F-FR-R', 'FR-E-FR-R-FR-T', 'FR-F-FR-G-FR-J', 'FR-F-FR-J-FR-Q', 'FR-F-FR-L-FR-Q', 'FR-F-FR-Q-FR-R', 'FR-F-FR-Q-FR-S', 'FR-F-FR-Q-FR-T', 'FR-F-FR-J-FR-L', 'FR-F-FR-J-FR-R', 'FR-F-FR-J-FR-S', 'FR-F-FR-J-FR-T', 'FR-F-FR-L-FR-N', 'FR-F-FR-L-FR-R', 'FR-F-FR-L-FR-T', 'FR-F-FR-R-FR-T', 'FR-G-FR-I-FR-J', 'FR-G-FR-I-FR-M', 'FR-G-FR-I-FR-S', 'FR-G-FR-I-FR-V', 'FR-G-FR-J-FR-Q', 'FR-G-FR-Q-FR-S', 'FR-G-FR-J-FR-M', 'FR-G-FR-J-FR-S', 'FR-G-FR-M-FR-S', 'FR-G-FR-O-FR-S', 'FR-I-FR-K-FR-V', 'FR-I-FR-M-FR-V', 'FR-I-FR-U-FR-V', 'FR-J-FR-Q-FR-S', 'FR-O-FR-Q-FR-S', 'FR-J-FR-O-FR-S', 'FR-K-FR-L-FR-N', 'FR-K-FR-N-FR-U', 'FR-K-FR-N-FR-V', 'FR-K-FR-U-FR-V', 'FR-L-FR-N-FR-T', 'FR-L-FR-R-FR-T']

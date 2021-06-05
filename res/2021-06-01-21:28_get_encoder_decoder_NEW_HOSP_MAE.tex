@@ -1,0 +1,33 @@
+%2021-06-01-21:28_get_encoder_decoder_NEW_HOSP_MAE
+\begin{table}[H]
+\centering
+\caption{MAE on each walk when predicting new hospitalizations for the model, for up to 20 horizons. The mean over all walks is also reported. Boldface indicates the best performance on each row. The training dataset covered the French regions and Belgium, composed of 23 initial regions and 0 augmented regions }
+\label{tab:MAE_walk_encoder_decoder}
+\begin{tabular}{lrrrrrr}
+\toprule
+Horizon &  Dec 2020 &  Jan 2021 &  Feb 2021 &  Mar 2021 &  Apr 2021 &  mean \\
+\midrule
+t+1  & \textbf{21.74}  & 32.88  & 30.14  & 38.02  & 34.52  & 31.46  \\
+t+2  & \textbf{13.36}  & 24.51  & 26.07  & 32.21  & 29.42  & 25.11  \\
+t+3  & \textbf{11.10}  & 17.26  & 22.81  & 26.86  & 25.09  & 20.62  \\
+t+4  & 14.34  & \textbf{13.46}  & 20.11  & 22.17  & 21.31  & 18.28  \\
+t+5  & 21.19  & \textbf{12.97}  & 18.07  & 17.91  & 18.30  & 17.69  \\
+t+6  & 28.80  & 15.28  & 16.66  & \textbf{14.32}  & 16.18  & 18.25  \\
+t+7  & 36.57  & 18.53  & 15.78  & \textbf{12.36}  & 14.64  & 19.57  \\
+t+8  & 43.69  & 21.60  & 15.20  & \textbf{11.79}  & 13.59  & 21.17  \\
+t+9  & 49.98  & 24.40  & 14.80  & \textbf{12.14}  & 12.95  & 22.86  \\
+t+10  & 55.44  & 26.89  & 14.57  & 12.87  & \textbf{12.62}  & 24.48  \\
+t+11  & 60.07  & 29.00  & 14.51  & 13.92  & \textbf{12.74}  & 26.05  \\
+t+12  & 63.90  & 30.85  & 14.58  & 15.34  & \textbf{13.07}  & 27.55  \\
+t+13  & 67.07  & 32.41  & 14.77  & 16.85  & \textbf{13.37}  & 28.90  \\
+t+14  & 69.75  & 33.69  & 15.01  & 18.38  & \textbf{13.67}  & 30.10  \\
+t+15  & 71.98  & 34.70  & 15.33  & 19.90  & \textbf{13.93}  & 31.17  \\
+t+16  & 73.79  & 35.43  & 15.71  & 21.33  & \textbf{14.22}  & 32.09  \\
+t+17  & 75.22  & 35.87  & 16.17  & 22.70  & \textbf{14.56}  & 32.90  \\
+t+18  & 76.31  & 36.15  & 16.66  & 24.04  & \textbf{14.85}  & 33.60  \\
+t+19  & 77.21  & 36.30  & 17.16  & 25.22  & \textbf{15.07}  & 34.19  \\
+t+20  & 77.88  & 36.32  & 17.62  & 26.35  & \textbf{15.23}  & 34.68  \\
+
+\bottomrule
+\end{tabular}
+\end{table}

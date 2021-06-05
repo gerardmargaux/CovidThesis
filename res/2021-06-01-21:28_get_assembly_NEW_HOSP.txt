@@ -1,0 +1,24 @@
+model 1:
+
+def get_custom_linear_regression(window_size=2, *args, **kwargs):
+    model = LinearRegressionHospi(window_size)
+    model.compile(loss=tf.losses.MeanSquaredError(),
+                      metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    return model
+
+
+model 2:
+
+    (get_custom_linear_regression, dg, lambda batch_input_shape: get_dense_model(batch_input_shape, use_lambda=False))
+
+
+epochs = 1, es_stop_val = False
+trained using the validation set
+
+dg_1:
+n_samples = 30, n_forecast = 20
+data = ['NEW_HOSP', 'TOT_HOSP', 'TOT_HOSP_log', 'TOT_HOSP_pct', 'Fièvre', 'Mal de gorge', 'Agueusie', 'Symptôme', 'Coronavirus disease 2019', 'Cure']
+target = NEW_HOSP
+scaling = <class 'sklearn.preprocessing._data.MinMaxScaler'>, scaling type = batch
+nb init regions = 23, nb augmented regions = 0
+regions = ['FR-A', 'FR-B', 'FR-C', 'FR-P', 'FR-D', 'FR-E', 'FR-F', 'FR-G', 'FR-H', 'FR-I', 'FR-Q', 'FR-J', 'FR-K', 'FR-L', 'FR-M', 'FR-N', 'FR-O', 'FR-R', 'FR-S', 'FR-T', 'FR-U', 'FR-V', 'BE']
