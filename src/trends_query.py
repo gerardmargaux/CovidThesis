@@ -1487,6 +1487,7 @@ class MinimalQueryList(QueryList):
         self.overlap_hourly_daily = 6  # overlap used for daily to hourly requests
         self.overlap_hourly = 15  # overlap used between 2 hourly requests
         self.part = 'daily'  # switch to 'hourly' once all daily requests have been processed
+        self.delete_hourly = set()  # list of hourly files that must be deleted
         super().__init__(topics, geo, dir_min_daily, trends_request, begin, end, DailyQuery, query_limit, overlap,
                          number, cat, gprop, savefile, shuffle)
 
@@ -1512,11 +1513,16 @@ class MinimalQueryList(QueryList):
                 if os.path.exists(filename):
                     df_hourly = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_hourly).set_index(
                         'date')
-                    # first hourly date registered + timedelta
-                    begin_hourly = (df_hourly.index.min() - timedelta(
-                        days=(self.overlap_hourly_daily - 1))).to_pydatetime().date()
-                    begin_hourly = date_to_datetime(begin_hourly)
-                    end = min(self.end, begin_hourly)
+                    # check if the hourly data covered the last end asked. If yes, keep it. Otherwise, will be deleted
+                    if df_hourly.index.max().to_pydatetime() < self.end:  # throw away the hourly data
+                        end = self.end
+                        self.delete_hourly.add(filename)
+                    else:  # keep the hourly data
+                        # first hourly date registered + timedelta
+                        begin_hourly = (df_hourly.index.min() - timedelta(
+                            days=(self.overlap_hourly_daily - 1))).to_pydatetime().date()
+                        begin_hourly = date_to_datetime(begin_hourly)
+                        end = min(self.end, begin_hourly)
                 else:
                     end = self.end
                 yield self.query(topic_name, topic_code, geo_code, self.trends_request, self.begin, end,
@@ -1533,6 +1539,11 @@ class MinimalQueryList(QueryList):
         for topic_name, topic_code in self.topics.items():
             for geo_code, geo_name in self.geo.items():
                 filename = f'{self.directory}/{geo_code}-{topic_name}.csv'
+                filename_hourly = f'{self.directory_hourly}/{geo_code}-{topic_name}.csv'
+                if filename_hourly in self.delete_hourly:  # need to actualise the hourly data col
+                    if self.verbose:
+                        print(f'removing outdated hourly file ({filename_hourly})')
+                    os.remove(filename_hourly)
                 if os.path.exists(filename):
                     df_daily = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index(
                         'date')
@@ -1958,6 +1969,8 @@ class HourlyModelData(ModelData):
         list_df_hourly = HourlyModelData.drop_incomplete_days(
             list_df_hourly)  # drop the incomplete days (check doc for details)
         list_df_hourly = [df.resample('D').mean() for df in list_df_hourly]  # aggregate to daily data
+        for i in range(len(list_df_hourly)):
+            list_df_hourly[i] = list_df_hourly[i] * 100 / list_df_hourly[i].max()
         return list_df_hourly
 
     @staticmethod
@@ -2193,7 +2206,7 @@ def collect_data(method: str = 'daily', topics: Dict[str, str] = None, geo: Dict
     if geo is None:
         geo = util.french_region_and_be
 
-    trends_request = TorTrendsRequest(max_errors=np.inf)  # use local queries for the beginning
+    trends_request = LocalTrendsRequest(max_errors=4)  # use local queries for the beginning
     begin = datetime.strptime('2020-02-01', '%Y-%m-%d')
     if method == 'daily':
         end = DailyQueryBatch.latest_day_available()
@@ -2299,24 +2312,8 @@ def nb_request_1_year():
 if __name__ == '__main__':
     topics = util.list_topics_fr_hourly
     geo = util.french_region_and_be
-    '''
-        {
-        'FR-J': 'Ile-de-France',
-        'FR-K': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-L': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-M': "Alsace-Champagne-Ardenne-Lorraine",
-        'FR-N': 'Languedoc-Roussillon-Midi-Pyrénées',
-        'FR-O': 'Nord-Pas-de-Calais-Picardie',
-        'FR-R': 'Pays de la Loire',
-        'FR-S': 'Nord-Pas-de-Calais-Picardie',
-        'FR-T': "Aquitaine-Limousin-Poitou-Charentes",
-        'FR-U': "Provence-Alpes-Côte d'Azur",
-        'FR-V': "Auvergne-Rhône-Alpes",
-        'BE': "Belgique",
-    }
-    '''
-    #collect_data('hourly', topics, geo)
-    #collect_data('gap', topics, geo)
-    generate_model_data('minimal', topics, geo)
+    mode = 'minimal'
+    collect_data(mode, topics, geo)
+    generate_model_data(mode, topics, geo)
     # collect_relevant_topics()
     # collect_for_plots()
